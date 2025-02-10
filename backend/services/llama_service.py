@@ -29,7 +29,8 @@ class LlamaService:
 
         # Initialize pgvector store with required parameters
         self.vector_store = PGVectorStore(
-            async_connection_string=async_db_url,
+            connection_string=db_url,  # Regular connection string
+            async_connection_string=async_db_url,  # Async connection string
             schema_name="public",  # Using default PostgreSQL schema
             table_name="embeddings",
             embed_dim=3072  # dimension for text-embedding-3-large
