@@ -7,7 +7,7 @@ router = APIRouter()
 llama_service = LlamaService()
 
 class ChatRequest(BaseModel):
-    repository_id: int
+    repository_ids: List[int]
     message: str
     chat_history: List[Dict[str, str]]
 
@@ -17,8 +17,14 @@ async def chat_message(request: ChatRequest) -> Dict[str, str]:
     Process a chat message using LlamaIndex and Gemini
     """
     try:
+        if not request.repository_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one repository ID must be provided"
+            )
+
         response = await llama_service.chat(
-            repository_id=request.repository_id,
+            repository_ids=request.repository_ids,
             message=request.message,
             chat_history=request.chat_history
         )
@@ -27,6 +33,6 @@ async def chat_message(request: ChatRequest) -> Dict[str, str]:
 
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Failed to generate response: {str(e)}"
         )

@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { Repository } from "@shared/schema";
 
 export default function Chat() {
-  const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
+  const [selectedRepos, setSelectedRepos] = useState<Repository[]>([]);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -15,11 +15,11 @@ export default function Chat() {
         </CardHeader>
         <CardContent className="space-y-6">
           <RepositorySelector
-            value={selectedRepo}
-            onChange={setSelectedRepo}
+            value={selectedRepos}
+            onChange={setSelectedRepos}
           />
-          {selectedRepo && (
-            <ChatInterface repository={selectedRepo} />
+          {selectedRepos.length > 0 && (
+            <ChatInterface repositories={selectedRepos} />
           )}
         </CardContent>
       </Card>

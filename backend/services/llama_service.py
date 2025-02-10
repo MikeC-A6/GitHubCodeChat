@@ -2,12 +2,14 @@
 import os
 from typing import List, Dict, Any
 from pathlib import Path
+import logging
 
 # LlamaIndex core imports
 from llama_index.core import (
     Settings,
     VectorStoreIndex,
     SimpleDirectoryReader,
+    ServiceContext
 )
 
 # LlamaIndex components
@@ -16,6 +18,7 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
+import pinecone
 
 # Custom exceptions
 class LlamaServiceError(Exception):
@@ -34,155 +37,87 @@ class ChatError(LlamaServiceError):
     """Raised when there's an error in chat processing"""
     pass
 
+logger = logging.getLogger(__name__)
+
 class LlamaService:
     def __init__(self):
-        try:
-            # Validate environment variables
-            self._validate_environment()
-
-            # Configure global settings with Gemini LLM
-            self._configure_settings()
-
-            # Initialize storage
-            self.documents = None
-            self.index = None
-
-            # Initialize vector store
-            self._initialize_vector_store()
-
-            # Load documents
-            self._initialize_documents()
-
-        except Exception as e:
-            raise LlamaServiceError(f"Failed to initialize LlamaService: {str(e)}")
-
-    def _validate_environment(self):
-        """Validate required environment variables"""
-        required_vars = {
-            "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY"),
-            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-            "PINECONE_API_KEY": os.getenv("PINECONE_API_KEY")
-        }
-
-        missing_vars = [var for var, value in required_vars.items() if not value]
-        if missing_vars:
-            raise LlamaServiceError(f"Missing required environment variables: {', '.join(missing_vars)}")
-
-    def _configure_settings(self):
-        """Configure LlamaIndex settings"""
-        try:
-            Settings.llm = Gemini(
-                api_key=os.getenv("GEMINI_API_KEY"),
-                model_name="models/gemini-pro"
-            )
-            Settings.embed_model = OpenAIEmbedding(
-                api_key=os.getenv("OPENAI_API_KEY"),
-                model_name="text-embedding-3-large"
-            )
-            Settings.node_parser = SimpleNodeParser.from_defaults()
-        except Exception as e:
-            raise LlamaServiceError(f"Failed to configure settings: {str(e)}")
-
-    def _initialize_vector_store(self):
-        """Initialize the Pinecone vector store"""
-        try:
-            # Initialize Pinecone client (simpler initialization)
-            pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-            
-            # Index name for our application
-            index_name = "codebases"  # Using the existing index name from your console
-
-            # Get the index directly (don't try to create it)
-            pinecone_index = pc.Index(index_name)
-
-            # Initialize vector store with namespace support
-            self.vector_store = PineconeVectorStore(
-                pinecone_index=pinecone_index,
-                metadata_filters={"repository_id": ""}  # Add metadata filter support
-            )
-        except Exception as e:
-            raise VectorStoreError(f"Failed to initialize Pinecone vector store: {str(e)}")
-
-    def _initialize_documents(self):
-        """Initialize and load documents"""
-        try:
-            data_dir = Path("./data")
-            if not data_dir.exists():
-                raise DocumentLoadError("Data directory does not exist")
-
-            self.documents = SimpleDirectoryReader(
-                input_dir=str(data_dir)
-            ).load_data()
-
-            if not self.documents:
-                raise DocumentLoadError("No documents found in data directory")
-
-            # Add repository metadata to documents
-            for doc in self.documents:
-                doc.metadata["repository_id"] = str(repository_id)  # Need to pass repository_id here
-
-            self.index = VectorStoreIndex.from_documents(
-                self.documents,
-                vector_store=self.vector_store
-            )
-        except DocumentLoadError as e:
-            print(f"Warning: {str(e)}")
-            self.documents = []
-            self.index = None
-        except Exception as e:
-            raise DocumentLoadError(f"Failed to load documents: {str(e)}")
+        """Initialize LlamaIndex with Gemini and Pinecone"""
+        # Initialize Pinecone
+        pinecone.init(
+            api_key=os.environ.get('PINECONE_API_KEY') or environ.get('REPLIT_PINECONE_API_KEY'),
+            environment="gcp-starter"  # Using the default starter environment
+        )
+        self.index_name = "codebases"  # Using our existing index name
+        
+        # Initialize Gemini
+        self.llm = Gemini(
+            api_key=os.environ.get('GEMINI_API_KEY') or environ.get('REPLIT_GEMINI_API_KEY'),
+            model="gemini-2.0-flash",
+            temperature=0.1,
+            max_tokens=4096
+        )
+        
+        # Initialize embedding model
+        self.embed_model = OpenAIEmbedding(
+            api_key=os.environ.get('OPENAI_API_KEY') or environ.get('REPLIT_OPENAI_API_KEY'),
+            model_name="text-embedding-3-small"
+        )
+        
+        # Set up LlamaIndex
+        Settings.llm = self.llm
+        Settings.embed_model = self.embed_model
+        
+        # Initialize vector store
+        self.vector_store = PineconeVectorStore(
+            pinecone_index=pinecone.Index(self.index_name)
+        )
 
     async def chat(
-        self, 
-        repository_id: int, 
-        message: str, 
+        self,
+        repository_ids: List[int],
+        message: str,
         chat_history: List[Dict[str, str]]
     ) -> str:
-        """Generate response using Gemini model with context from Pinecone"""
+        """
+        Process a chat message using LlamaIndex and Gemini
+        """
         try:
-            if not message.strip():
-                raise ChatError("Empty message provided")
-
-            if not self.vector_store:
-                raise ChatError("Vector store not initialized")
-
-            # Update metadata filter for specific repository
-            self.vector_store.metadata_filters = {"repository_id": str(repository_id)}
-
-            # Create index from vector store
-            index = await VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_store
+            # Create metadata filter for the specified repositories
+            metadata_filters = {"repository_id": {"$in": repository_ids}}
+            
+            # Create vector store index with the filter
+            index = VectorStoreIndex.from_vector_store(
+                vector_store=self.vector_store,
+                service_context=ServiceContext.from_defaults(
+                    llm=self.llm,
+                    embed_model=self.embed_model
+                )
             )
-
-            # Create chat engine with metadata filtering
+            
+            # Create chat engine
             chat_engine = index.as_chat_engine(
                 chat_mode="condense_plus_context",
                 verbose=True,
-                similarity_top_k=5,
-                context_window=4096,
-                num_output_tokens=1024,
-                metadata_filters={"repository_id": str(repository_id)}
+                metadata_filters=metadata_filters,
+                similarity_top_k=5
             )
-
-            # Format chat history
-            formatted_history = [
-                (msg["role"], msg["content"]) 
-                for msg in chat_history
-                if msg.get("role") and msg.get("content")
-            ]
-
-            # Generate response
+            
+            # Convert chat history to the format expected by LlamaIndex
+            formatted_history = []
+            for msg in chat_history:
+                formatted_history.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+            
+            # Get response
             response = await chat_engine.achat(
                 message=message,
                 chat_history=formatted_history
             )
-
-            if not response or not response.response:
-                raise ChatError("Failed to generate response")
-
-            return response.response
-
-        except ChatError as e:
-            raise e
+            
+            return str(response)
+            
         except Exception as e:
-            raise ChatError(f"Error in chat service: {str(e)}")
+            logger.error(f"Error in chat: {str(e)}")
+            raise Exception(f"Failed to process chat message: {str(e)}")

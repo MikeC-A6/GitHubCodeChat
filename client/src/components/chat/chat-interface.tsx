@@ -1,65 +1,110 @@
-import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Input } from "@/components/ui/input";
+import { useState } from "react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useForm } from "react-hook-form";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Repository, Message } from "@shared/schema";
-import { SendIcon } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { Repository } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
-type ChatInterfaceProps = {
-  repository: Repository;
-};
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
 
-export default function ChatInterface({ repository }: ChatInterfaceProps) {
-  const { register, handleSubmit, reset } = useForm<{ message: string }>();
+interface Props {
+  repositories: Repository[];
+}
 
-  const { data: messages } = useQuery<Message[]>({
-    queryKey: [`/api/repositories/${repository.id}/messages`],
-  });
+export default function ChatInterface({ repositories }: Props) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const sendMessage = useMutation({
-    mutationFn: async (content: string) => {
-      const response = await apiRequest("POST", `/api/repositories/${repository.id}/messages`, {
-        content,
-        role: "user",
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    const userMessage = input.trim();
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setIsLoading(true);
+
+    try {
+      const response = await apiRequest("POST", "/chat/message", {
+        repository_ids: repositories.map((repo) => repo.id),
+        message: userMessage,
+        chat_history: messages.map(({ role, content }) => ({
+          role,
+          content,
+        })),
       });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: [`/api/repositories/${repository.id}/messages`],
-      });
-      reset();
-    },
-  });
+
+      if (!response.ok) {
+        throw new Error("Failed to get response");
+      }
+
+      const data = await response.json();
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.response },
+      ]);
+    } catch (error) {
+      console.error("Chat error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Sorry, I encountered an error processing your request.",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="space-y-4">
-      <ScrollArea className="h-[500px] border rounded-lg p-4">
+    <div className="flex flex-col h-[600px] border rounded-md">
+      <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
-          {messages?.map((message) => (
-            <Card key={message.id} className={message.role === "user" ? "ml-12" : "mr-12"}>
-              <div className="p-3">
-                <p className="text-sm">{message.content}</p>
+          {messages.map((message, i) => (
+            <div
+              key={i}
+              className={`flex ${
+                message.role === "assistant" ? "justify-start" : "justify-end"
+              }`}
+            >
+              <div
+                className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  message.role === "assistant"
+                    ? "bg-secondary"
+                    : "bg-primary text-primary-foreground"
+                }`}
+              >
+                {message.content}
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       </ScrollArea>
 
-      <form
-        onSubmit={handleSubmit((data) => sendMessage.mutate(data.message))}
-        className="flex gap-2"
-      >
-        <Input
-          {...register("message", { required: true })}
-          placeholder="Type your message..."
-        />
-        <Button type="submit" size="icon">
-          <SendIcon className="h-4 w-4" />
-        </Button>
+      <form onSubmit={handleSubmit} className="p-4 border-t">
+        <div className="flex gap-2">
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask a question about the selected repositories..."
+            className="min-h-[60px]"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+          />
+          <Button type="submit" disabled={isLoading}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
       </form>
     </div>
   );
