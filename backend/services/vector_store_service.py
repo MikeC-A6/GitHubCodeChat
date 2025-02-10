@@ -48,7 +48,7 @@ class VectorStoreService:
         Args:
             repository_id: ID of the repository in PostgreSQL
             vectors: List of vectors from the embeddings service
-                    Each vector should have: file_name, embedding, content
+                    Each vector should have: file_name, embedding, content, metadata
         """
         try:
             # Format vectors for Pinecone
@@ -59,9 +59,10 @@ class VectorStoreService:
                     "id": vector_id,
                     "values": vec["embedding"],
                     "metadata": {
+                        **vec["metadata"],
                         "repository_id": str(repository_id),
-                        "file_name": vec["file_name"],
-                        "content": vec["content"],
+                        "file_path": vec["file_name"],
+                        "chunk_content": vec["content"],
                         "timestamp": datetime.utcnow().isoformat()
                     }
                 })

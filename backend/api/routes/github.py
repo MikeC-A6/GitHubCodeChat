@@ -26,6 +26,14 @@ async def get_repositories() -> JSONResponse:
     """
     try:
         repositories = await db_service.get_repositories()
+        
+        # Convert datetime objects to ISO format strings
+        for repo in repositories:
+            if repo.get('processed_at'):
+                repo['processed_at'] = repo['processed_at'].isoformat()
+            if repo.get('created_at'):
+                repo['created_at'] = repo['created_at'].isoformat()
+                
         return JSONResponse(content=repositories)
     except Exception as e:
         logger.error(f"Error fetching repositories: {str(e)}")
@@ -174,11 +182,18 @@ async def get_embedding_status(repo_id: int) -> Dict[str, Any]:
                 detail=f"Repository {repo_id} not found"
             )
             
+        # Convert datetime objects to ISO format strings
+        if repository.get('processed_at'):
+            repository['processed_at'] = repository['processed_at'].isoformat()
+        if repository.get('created_at'):
+            repository['created_at'] = repository['created_at'].isoformat()
+            
         return {
             "status": repository.get("status", "pending"),
             "error": repository.get("error_message"),
             "repository_id": repo_id,
-            "vectorized": repository.get("vectorized", False)
+            "vectorized": repository.get("vectorized", False),
+            "processed_at": repository.get("processed_at")
         }
         
     except HTTPException as e:

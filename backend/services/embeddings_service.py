@@ -6,12 +6,15 @@ import logging
 from datetime import datetime
 from typing import Optional
 from .vector_store_service import VectorStoreService
+from llama_index.core import Document, Settings
+from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.core.node_parser import SentenceSplitter
 
 logger = logging.getLogger(__name__)
 
 class EmbeddingsService:
     def __init__(self):
-        """Initialize the OpenAI client"""
+        """Initialize the OpenAI client and LlamaIndex settings"""
         # Get API key
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
@@ -26,6 +29,20 @@ class EmbeddingsService:
             
             # Initialize vector store service
             self.vector_store = VectorStoreService()
+            
+            # Initialize LlamaIndex settings
+            self.embed_model = OpenAIEmbedding(
+                model="text-embedding-3-large",
+                dimensions=3072,
+                embed_batch_size=10
+            )
+            Settings.embed_model = self.embed_model
+            
+            # Initialize node parser for chunking
+            self.node_parser = SentenceSplitter(
+                chunk_size=3000,
+                chunk_overlap=200
+            )
             
             logger.info("EmbeddingsService initialized successfully")
             
@@ -60,6 +77,15 @@ class EmbeddingsService:
             # Generate embeddings for all files
             embeddings_list = await self.generate_embeddings(files)
             
+            # Add repository metadata to each vector
+            for vector in embeddings_list:
+                vector["metadata"].update({
+                    "repository_id": str(repo_id),
+                    "file_path": vector["file_name"],
+                    "chunk_content": vector["content"],
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            
             # Store vectors in Pinecone using vector store service
             await self.vector_store.upsert_vectors(
                 repository_id=repo_id,
@@ -86,27 +112,62 @@ class EmbeddingsService:
 
     async def generate_embeddings(self, files: List[Dict[str, str]]) -> List[Dict[str, Any]]:
         """
-        Generate embeddings for repository files using OpenAI's text-embedding-3-large model
+        Generate embeddings for repository files using LlamaIndex and OpenAI
         """
         embeddings_list = []
 
         try:
             for file in files:
-                # Combine filename and content for context
-                content = f"File: {file['name']}\n\nContent:\n{file['content']}"
+                # Skip files with empty or invalid content
+                if not file.get('content') or file['content'].strip() == '':
+                    logger.info(f"Skipping empty file: {file.get('name', 'unknown')}")
+                    continue
 
-                # Generate embeddings using OpenAI
-                response = await self.client.embeddings.create(
-                    model="text-embedding-3-large",
-                    input=content,
-                    dimensions=3072
+                # Create a Document for each file
+                doc = Document(
+                    text=file['content'],
+                    metadata={"file_name": file['name']}
                 )
-
-                embeddings_list.append({
-                    "file_name": file["name"],
-                    "embedding": response.data[0].embedding,
-                    "content": content
-                })
+                
+                # Skip if document text is empty after processing
+                if not doc.text or doc.text.strip() == '':
+                    logger.info(f"Skipping file with empty text after processing: {file.get('name', 'unknown')}")
+                    continue
+                
+                # Split document into nodes/chunks
+                nodes = self.node_parser.get_nodes_from_documents([doc])
+                
+                # Skip if no valid nodes were created
+                if not nodes:
+                    logger.info(f"Skipping file with no valid chunks: {file.get('name', 'unknown')}")
+                    continue
+                
+                # Generate embeddings for each chunk
+                for node in nodes:
+                    try:
+                        # Skip empty nodes
+                        if not node.text or node.text.strip() == '':
+                            continue
+                            
+                        # Get embedding for the chunk
+                        embedding = self.embed_model.get_text_embedding(
+                            node.text
+                        )
+                        
+                        # Add to results with metadata
+                        embeddings_list.append({
+                            "file_name": file["name"],
+                            "embedding": embedding,
+                            "content": node.text,
+                            "metadata": {
+                                "file_name": file["name"],
+                                "chunk_index": len(embeddings_list),
+                                "total_chunks": len(nodes)
+                            }
+                        })
+                    except Exception as chunk_error:
+                        logger.error(f"Error processing chunk in file {file['name']}: {str(chunk_error)}")
+                        continue  # Skip this chunk and continue with others
 
             logger.info(f"Successfully generated embeddings for {len(files)} files")
             return embeddings_list

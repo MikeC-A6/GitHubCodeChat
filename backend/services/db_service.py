@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 import logging
 from pathlib import Path
+import backoff  # We'll need to add this to requirements.txt
 
 logger = logging.getLogger(__name__)
 
@@ -165,28 +166,41 @@ class DatabaseService:
                 logger.error(f"Failed to create repository: {str(e)}")
                 raise DatabaseError(f"Failed to create repository: {str(e)}")
 
+    @backoff.on_exception(
+        backoff.expo,
+        (asyncpg.exceptions.ConnectionDoesNotExistError, DatabaseError),
+        max_tries=3
+    )
     async def get_repositories(self) -> List[Dict[str, Any]]:
         """Get all repositories"""
-        try:
-            if not self._pool:
-                raise DatabaseError("Database not initialized")
+        await self.ensure_connection()
 
-            async with self._pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
+            try:
                 rows = await conn.fetch("""
                     SELECT id, url, name, owner, description, status, 
-                           branch, path, processed_at, vectorized
+                           branch, path, processed_at, vectorized, error_message
                     FROM repositories
                     ORDER BY created_at DESC
                 """)
                 return [dict(row) for row in rows]
-        except Exception as e:
-            logger.error(f"Error fetching repositories: {str(e)}")
-            raise DatabaseError(f"Failed to fetch repositories: {str(e)}")
+            except asyncpg.exceptions.ConnectionDoesNotExistError as e:
+                logger.error(f"Connection lost while fetching repositories: {str(e)}")
+                raise
+            except Exception as e:
+                logger.error(f"Error fetching repositories: {str(e)}")
+                raise DatabaseError(f"Failed to fetch repositories: {str(e)}")
 
+    @backoff.on_exception(
+        backoff.expo,
+        (asyncpg.exceptions.ConnectionDoesNotExistError, DatabaseError),
+        max_tries=3
+    )
     async def get_repository(self, id: int) -> Dict[str, Any]:
         """Get a repository by ID"""
-        pool = await self.get_pool()
-        async with pool.acquire() as conn:
+        await self.ensure_connection()
+        
+        async with self._pool.acquire() as conn:
             try:
                 row = await conn.fetchrow("""
                     SELECT 
@@ -216,6 +230,9 @@ class DatabaseService:
                     "processed_at": row["processed_at"]
                 }
 
+            except asyncpg.exceptions.ConnectionDoesNotExistError as e:
+                logger.error(f"Connection lost while getting repository: {str(e)}")
+                raise
             except Exception as e:
                 raise DatabaseError(f"Failed to get repository: {str(e)}")
 
@@ -258,6 +275,41 @@ class DatabaseService:
             except Exception as e:
                 raise DatabaseError(f"Failed to update repository status: {str(e)}")
 
+    async def ensure_connection(self):
+        """Ensure database connection is active and reconnect if necessary"""
+        try:
+            if not self._pool:
+                self._pool = await asyncpg.create_pool(
+                    self.db_url,
+                    ssl="require",
+                    min_size=1,
+                    max_size=10,
+                    command_timeout=60
+                )
+            else:
+                # Test the connection
+                async with self._pool.acquire() as conn:
+                    await conn.execute("SELECT 1")
+        except Exception as e:
+            logger.error(f"Database connection error: {str(e)}")
+            # Close the old pool if it exists
+            if self._pool:
+                await self._pool.close()
+                self._pool = None
+            # Create a new pool
+            self._pool = await asyncpg.create_pool(
+                self.db_url,
+                ssl="require",
+                min_size=1,
+                max_size=10,
+                command_timeout=60
+            )
+
+    @backoff.on_exception(
+        backoff.expo,
+        (asyncpg.exceptions.ConnectionDoesNotExistError, DatabaseError),
+        max_tries=3
+    )
     async def update_embedding_status(
         self,
         repo_id: int,
@@ -265,15 +317,11 @@ class DatabaseService:
         error_message: str = None
     ) -> Dict[str, Any]:
         """
-        Update repository embedding status
-        
-        Args:
-            repo_id: Repository ID
-            status: New status (pending, processing, completed, failed)
-            error_message: Optional error message if status is 'failed'
+        Update repository embedding status with retry logic
         """
-        pool = await self.get_pool()
-        async with pool.acquire() as conn:
+        await self.ensure_connection()
+        
+        async with self._pool.acquire() as conn:
             try:
                 update_fields = ["status = $2"]
                 params = [repo_id, status]
@@ -313,20 +361,28 @@ class DatabaseService:
                 
                 return dict(row)
                 
+            except asyncpg.exceptions.ConnectionDoesNotExistError as e:
+                logger.error(f"Connection lost during status update: {str(e)}")
+                raise
             except Exception as e:
+                logger.error(f"Failed to update embedding status: {str(e)}")
                 raise DatabaseError(f"Failed to update embedding status: {str(e)}")
 
     async def close(self):
         if self._pool:
             await self._pool.close()
 
+    @backoff.on_exception(
+        backoff.expo,
+        (asyncpg.exceptions.ConnectionDoesNotExistError, DatabaseError),
+        max_tries=3
+    )
     async def store_repository(self, repo_data: Dict[str, Any]) -> int:
         """Store repository data and return the ID"""
-        try:
-            if not self._pool:
-                raise DatabaseError("Database not initialized")
+        await self.ensure_connection()
 
-            async with self._pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
+            try:
                 row = await conn.fetchrow("""
                     INSERT INTO repositories (url, name, owner, description, files, branch, path)
                     VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -341,26 +397,37 @@ class DatabaseService:
                     repo_data.get("path", "")
                 )
                 return row["id"]
-        except Exception as e:
-            logger.error(f"Error storing repository: {str(e)}")
-            raise DatabaseError(f"Failed to store repository: {str(e)}")
+            except asyncpg.exceptions.ConnectionDoesNotExistError as e:
+                logger.error(f"Connection lost while storing repository: {str(e)}")
+                raise
+            except Exception as e:
+                logger.error(f"Error storing repository: {str(e)}")
+                raise DatabaseError(f"Failed to store repository: {str(e)}")
 
+    @backoff.on_exception(
+        backoff.expo,
+        (asyncpg.exceptions.ConnectionDoesNotExistError, DatabaseError),
+        max_tries=3
+    )
     async def store_embeddings(self, repo_id: int, embeddings: List[Dict[str, Any]]) -> None:
         """Store embeddings for a repository"""
-        try:
-            if not self._pool:
-                raise DatabaseError("Database not initialized")
+        await self.ensure_connection()
 
-            async with self._pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
+            try:
                 await conn.execute("""
                     UPDATE repositories
                     SET vectorized = true,
-                        processed_at = CURRENT_TIMESTAMP
+                        processed_at = CURRENT_TIMESTAMP,
+                        status = 'completed'
                     WHERE id = $1
                 """, repo_id)
-        except Exception as e:
-            logger.error(f"Error storing embeddings: {str(e)}")
-            raise DatabaseError(f"Failed to store embeddings: {str(e)}")
+            except asyncpg.exceptions.ConnectionDoesNotExistError as e:
+                logger.error(f"Connection lost while storing embeddings: {str(e)}")
+                raise
+            except Exception as e:
+                logger.error(f"Error storing embeddings: {str(e)}")
+                raise DatabaseError(f"Failed to store embeddings: {str(e)}")
 
     async def get_repository_files(self, repo_id: int) -> List[Dict[str, str]]:
         """Get files for a repository"""

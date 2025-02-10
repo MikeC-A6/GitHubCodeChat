@@ -6,6 +6,7 @@ from typing import Dict, List, Any
 from os import environ
 import re
 import logging
+from ..utils.file_filter import filter_repository_files
 
 logger = logging.getLogger(__name__)
 
@@ -109,14 +110,18 @@ class GitHubService:
             path=repo_info["path"],  # could be empty or a subdirectory
         )
 
-        # 3. Return a dict with metadata + files
-        logger.info(f"Fetched {len(all_files)} total files recursively.")
+        # 3. Filter out ignored files
+        filtered_files = filter_repository_files(all_files)
+        logger.info(f"Filtered out {len(all_files) - len(filtered_files)} ignored files")
+        logger.info(f"Remaining files to process: {len(filtered_files)}")
+
+        # 4. Return a dict with metadata + filtered files
         return {
             "url": url,
             "owner": repo_info["owner"],
             "name": repo_info["name"],
             "description": "",  # can fetch separately if desired
-            "files": all_files,
+            "files": filtered_files,
             "path": repo_info["path"],
             "branch": repo_info["branch"],
             "status": "processed",
