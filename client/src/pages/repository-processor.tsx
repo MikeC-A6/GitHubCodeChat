@@ -3,43 +3,42 @@ import RepoForm from "@/components/repository/repo-form";
 import ProcessingStatus from "@/components/repository/processing-status";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function RepositoryProcessor() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const processRepo = useMutation({
     mutationFn: async (url: string) => {
-      // First fetch repository data from GitHub
-      const githubResponse = await apiRequest("POST", "/api/github/process", {
-        url,
-      });
-      const githubData = await githubResponse.json();
+      try {
+        const response = await apiRequest("POST", "/api/github/process", {
+          url,
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to process repository: ${errorText}`);
+        }
 
-      // Then create repository with complete data
-      const response = await apiRequest("POST", "/api/repositories", {
-        url,
-        name: githubData.repository.name,
-        owner: githubData.repository.owner,
-        description: githubData.repository.description,
-        files: githubData.repository.files,
-        status: "pending",
-        branch: githubData.repository.branch,
-        path: githubData.repository.path,
-      });
-      
-      return response.json();
+        return response.json();
+      } catch (error) {
+        console.error('Error processing repository:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       toast({
         title: "Repository submitted",
         description: "The repository is being processed.",
       });
+      // Refresh the repositories list
+      queryClient.invalidateQueries({ queryKey: ["/api/github/repositories"] });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to process repository.",
+        description: error.message || "Failed to process repository.",
         variant: "destructive",
       });
     },

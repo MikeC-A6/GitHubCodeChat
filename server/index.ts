@@ -1,15 +1,31 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { createProxyMiddleware } from "http-proxy-middleware";
+import { createProxyMiddleware, type Options } from "http-proxy-middleware";
 import { spawn } from "child_process";
+import path from "path";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Start FastAPI backend
-const pythonProcess = spawn("python3", ["-m", "uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]);
+log("Starting FastAPI backend...", "fastapi");
+
+const pythonProcess = spawn("python3", [
+  "-m", "uvicorn",
+  "backend.api.main:app",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--reload",  // Add auto-reload for development
+  "--log-level", "info"
+], {
+  cwd: process.cwd(),  // Ensure we're in the right directory
+  env: {
+    ...process.env,
+    PYTHONPATH: process.cwd()  // Add current directory to Python path
+  }
+});
 
 pythonProcess.stdout.on("data", (data) => {
   log(`Python: ${data}`, "fastapi");
@@ -19,60 +35,66 @@ pythonProcess.stderr.on("data", (data) => {
   log(`Python error: ${data}`, "fastapi");
 });
 
-// Add proxy middleware for FastAPI backend
-app.use("/api/github", createProxyMiddleware({
-  target: "http://localhost:8000",
-  changeOrigin: true,
-}));
-
-app.use("/api/chat", createProxyMiddleware({
-  target: "http://localhost:8000",
-  changeOrigin: true,
-}));
-
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
+pythonProcess.on("error", (error) => {
+  log(`Failed to start Python process: ${error}`, "fastapi");
 });
 
-(async () => {
-  const server = registerRoutes(app);
+pythonProcess.on("close", (code) => {
+  if (code !== 0) {
+    log(`Python process exited with code ${code}`, "fastapi");
+  }
+});
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+// Wait for FastAPI to start before setting up proxy
+setTimeout(() => {
+  // Add proxy middleware for FastAPI backend
+  const proxyOptions: Options = {
+    target: "http://localhost:8000",
+    changeOrigin: true,
+    pathRewrite: {
+      '^/api': ''  // Remove /api prefix when forwarding
+    },
+    onProxyError: (err, req, res) => {
+      log(`Proxy error: ${err}`, "fastapi");
+      res.writeHead(500, {
+        'Content-Type': 'application/json',
+      });
+      res.end(JSON.stringify({ error: "Failed to connect to Python backend" }));
+    }
+  };
 
-    res.status(status).json({ message });
-    throw err;
+  app.use("/api", createProxyMiddleware(proxyOptions));
+
+  app.use((req, res, next) => {
+    const start = Date.now();
+    const path = req.path;
+    let capturedJsonResponse: Record<string, any> | undefined = undefined;
+
+    const originalResJson = res.json;
+    res.json = function (bodyJson, ...args) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson.apply(res, [bodyJson, ...args]);
+    };
+
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      if (path.startsWith("/api")) {
+        let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+        if (capturedJsonResponse) {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        }
+        log(logLine);
+      }
+    });
+
+    next();
   });
 
+  // Register other routes
+  const server = registerRoutes(app);
+
   if (app.get("env") === "development") {
-    await setupVite(app, server);
+    setupVite(app, server);
   } else {
     serveStatic(app);
   }
@@ -81,4 +103,4 @@ app.use((req, res, next) => {
   server.listen(PORT, "0.0.0.0", () => {
     log(`serving on port ${PORT}`);
   });
-})();
+}, 2000);  // Give FastAPI 2 seconds to start

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>API Test</h1>
+    
+    <h2>Health Check</h2>
+    <button onclick="checkHealth()">Test Health Endpoint</button>
+    <pre id="healthResult"></pre>
+
+    <h2>Process Repository</h2>
+    <input type="text" id="repoUrl" value="https://github.com/MikeC-A6/GitHubCloner/tree/main/server" style="width: 500px">
+    <button onclick="processRepo()">Process Repository</button>
+    <pre id="repoResult"></pre>
+
+    <script>
+        function checkHealth() {
+            fetch('/api/health')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('healthResult').textContent = JSON.stringify(data, null, 2);
+                })
+                .catch(err => {
+                    document.getElementById('healthResult').textContent = 'Error: ' + err.message;
+                });
+        }
+
+        function processRepo() {
+            const url = document.getElementById('repoUrl').value;
+            fetch('/api/github/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url })
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('repoResult').textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(err => {
+                document.getElementById('repoResult').textContent = 'Error: ' + err.message;
+            });
+        }
+    </script>
+</body>
+</html> 

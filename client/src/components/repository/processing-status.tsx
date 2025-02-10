@@ -2,12 +2,40 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { Repository } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function ProcessingStatus() {
-  const { data: repositories } = useQuery<Repository[]>({
-    queryKey: ["/api/repositories"],
+  const { data: repositories, error, isLoading } = useQuery<Repository[]>({
+    queryKey: ["/api/github/repositories"],
+    queryFn: async () => {
+      try {
+        const response = await apiRequest("GET", "/api/github/repositories");
+        if (!response.ok) {
+          throw new Error("Failed to fetch repositories");
+        }
+        return response.json();
+      } catch (error) {
+        console.error("Error fetching repositories:", error);
+        throw error;
+      }
+    }
   });
+
+  if (isLoading) {
+    return <Progress value={100} className="w-full" />;
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>
+          Failed to load repositories. Please try again later.
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   if (!repositories?.length) {
     return null;
