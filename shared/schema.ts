@@ -16,6 +16,7 @@ export const repositories = pgTable(
     path: text("path").notNull().default(""),
     processedAt: timestamp("processed_at"),
     vectorized: boolean("vectorized").notNull().default(false),
+    errorMessage: text("error_message"),
   },
   (table) => ({
     statusIdx: index("repositories_status_idx").on(table.status),

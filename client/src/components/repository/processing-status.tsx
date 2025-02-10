@@ -108,9 +108,9 @@ export default function ProcessingStatus() {
     <ScrollArea className="h-[400px]">
       <div className="space-y-4">
         {repositories.map((repo: Repository) => (
-          <Card key={repo.id}>
+          <Card key={repo.id} className="relative">
             <CardContent className="pt-6">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">
                   <h3 className="font-semibold">{repo.name}</h3>
                   <p className="text-sm text-gray-500">
@@ -121,29 +121,41 @@ export default function ProcessingStatus() {
                       </span>
                     )}
                   </p>
+                  {repo.owner && (
+                    <p className="text-sm text-gray-500">Owner: {repo.owner}</p>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col items-end gap-2">
                   {/* Show progress indicator when processing */}
                   {repo.status === 'processing' && (
-                    <Progress value={100} className="w-[100px]" />
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">Processing...</span>
+                      <Progress value={100} className="w-[100px]" />
+                    </div>
                   )}
 
-                  {/* Show embed button when ready */}
-                  {repo.status === 'completed' && !repo.vectorized && (
+                  {/* Show embed button when repository is pending */}
+                  {repo.status === 'pending' && !repo.vectorized && (
                     <Button
                       onClick={() => startEmbedding.mutate(repo.id)}
                       disabled={startEmbedding.isPending}
-                      variant="secondary"
-                      size="sm"
+                      className="w-full md:w-auto"
                     >
-                      {startEmbedding.isPending ? "Starting..." : "Generate Embeddings"}
+                      {startEmbedding.isPending ? (
+                        <div className="flex items-center gap-2">
+                          <Progress value={100} className="w-[60px]" />
+                          <span>Starting...</span>
+                        </div>
+                      ) : (
+                        "Generate Embeddings"
+                      )}
                     </Button>
                   )}
 
                   {/* Show status when vectorized */}
                   {repo.vectorized && (
-                    <span className="text-sm text-green-600">
+                    <span className="text-sm text-green-600 font-medium">
                       ✓ Embeddings Ready
                     </span>
                   )}
