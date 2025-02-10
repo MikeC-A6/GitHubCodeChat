@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Repository } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+import MarkdownRenderer from "@/components/ui/markdown-renderer";
 
 interface Message {
   role: "user" | "assistant";
@@ -80,7 +81,7 @@ export default function ChatInterface({ repositories }: Props) {
                     : "bg-primary text-primary-foreground"
                 }`}
               >
-                {message.content}
+                <MarkdownRenderer content={message.content} />
               </div>
             </div>
           ))}
