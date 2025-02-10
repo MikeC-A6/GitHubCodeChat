@@ -13,10 +13,6 @@ import { IncomingMessage, ServerResponse, ClientRequest } from "http";
 // ------------------------------------------
 const app = express();
 
-// Parse JSON bodies so we can log them (and optionally rewrite them for the proxy)
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
 // ------------------------------------------
 // Start FastAPI via Uvicorn (spawn Python process)
 // ------------------------------------------
@@ -60,29 +56,15 @@ pythonProcess.on("close", (code) => {
 });
 
 // ------------------------------------------
-// Request Logging Middleware (place BEFORE proxy)
+// Request Logging Middleware (BEFORE proxy)
 // ------------------------------------------
 app.use((req: Request, res: Response, next: NextFunction) => {
   log(`Incoming request: ${req.method} ${req.url}`, "express");
   next();
 });
 
-// Response Logging Middleware (also place BEFORE proxy if you want to measure total time)
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const start = Date.now();
-  const path = req.path;
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-    log(logLine, "express");
-  });
-
-  next();
-});
-
 // ------------------------------------------
-// Proxy Middleware for FastAPI
+// Proxy Middleware for FastAPI (minimal configuration)
 // ------------------------------------------
 app.use(
   "/api",
@@ -92,61 +74,27 @@ app.use(
     pathRewrite: {
       "^/api": "", // remove '/api' prefix
     },
-    onProxyReq: (
-      proxyReq: ClientRequest,
-      req: express.Request,
-      res: express.Response
-    ) => {
-      // Log details of the proxied request
+    onProxyReq: (proxyReq: ClientRequest, req: express.Request, res: express.Response) => {
       log(`Proxying ${req.method} ${req.url}`, "fastapi");
-      log(`Request headers: ${JSON.stringify(req.headers)}`, "fastapi");
-
-      // Only rewrite the request body if it's a method that can have a JSON body
-      if (
-        ["POST", "PUT", "PATCH"].includes(req.method.toUpperCase()) &&
-        req.body
-      ) {
-        const bodyData = JSON.stringify(req.body);
-        log(`Request body: ${bodyData}`, "fastapi");
-
-        proxyReq.setHeader("Content-Type", "application/json");
-        proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
-        proxyReq.write(bodyData);
-        proxyReq.end();
-      }
     },
-    onProxyRes: (
-      proxyRes: IncomingMessage,
-      req: express.Request,
-      res: express.Response
-    ) => {
-      log(
-        `Proxy response: ${proxyRes.statusCode} for ${req.method} ${req.url}`,
-        "fastapi"
-      );
-
-      let responseBody = "";
-      proxyRes.on("data", (chunk) => {
-        responseBody += chunk;
-      });
-      proxyRes.on("end", () => {
-        log(`Response body: ${responseBody}`, "fastapi");
-      });
+    onProxyRes: (proxyRes: IncomingMessage, req: express.Request, res: express.Response) => {
+      log(`Proxy response: ${proxyRes.statusCode} for ${req.method} ${req.url}`, "fastapi");
     },
     onError: (err: Error, req: express.Request, res: express.Response) => {
       log(`Proxy error: ${err.message}`, "fastapi");
-      res.writeHead(500, {
-        "Content-Type": "application/json",
+      res.status(500).json({ 
+        error: "Failed to connect to Python backend", 
+        details: err.message 
       });
-      res.end(
-        JSON.stringify({
-          error: "Failed to connect to Python backend",
-          details: err.message,
-        })
-      );
     },
   } as Options)
 );
+
+// ------------------------------------------
+// Body Parsing Middleware (AFTER proxy)
+// ------------------------------------------
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 // ------------------------------------------
 // Register Other Routes (if any)
