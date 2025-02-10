@@ -23,6 +23,12 @@ async def process_repository(request: RepositoryRequest) -> Dict[str, Any]:
     try:
         # Fetch repository content
         repo_data = await github_service.fetch_repository(request.url)
+        
+        if not repo_data.get("files"):
+            raise HTTPException(
+                status_code=400,
+                detail="No files found in repository"
+            )
 
         # Generate embeddings
         embeddings = await embeddings_service.generate_embeddings(repo_data["files"])
@@ -32,8 +38,13 @@ async def process_repository(request: RepositoryRequest) -> Dict[str, Any]:
             "repository": repo_data,
             "embeddings": embeddings
         }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Failed to process repository: {str(e)}"
         )

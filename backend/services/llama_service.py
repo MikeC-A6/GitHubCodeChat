@@ -12,7 +12,7 @@ from llama_index.core import (
 
 # LlamaIndex components
 from llama_index.llms.gemini import Gemini
-from llama_index.embeddings import OpenAIEmbedding
+from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
@@ -86,30 +86,19 @@ class LlamaService:
     def _initialize_vector_store(self):
         """Initialize the Pinecone vector store"""
         try:
-            # Initialize Pinecone client
+            # Initialize Pinecone client (simpler initialization)
             pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-
+            
             # Index name for our application
-            index_name = "repo-analysis"
+            index_name = "codebases"  # Using the existing index name from your console
 
-            # Create index if it doesn't exist
-            if index_name not in pc.list_indexes().names():
-                pc.create_index(
-                    name=index_name,
-                    dimension=3072,  # Using OpenAI text-embedding-3-large dimensions
-                    metric="cosine",
-                    spec=ServerlessSpec(
-                        cloud="aws",
-                        region="us-west-2"
-                    )
-                )
-
-            # Get the index
+            # Get the index directly (don't try to create it)
             pinecone_index = pc.Index(index_name)
 
-            # Initialize vector store
+            # Initialize vector store with namespace support
             self.vector_store = PineconeVectorStore(
-                pinecone_index=pinecone_index
+                pinecone_index=pinecone_index,
+                metadata_filters={"repository_id": ""}  # Add metadata filter support
             )
         except Exception as e:
             raise VectorStoreError(f"Failed to initialize Pinecone vector store: {str(e)}")
@@ -127,6 +116,10 @@ class LlamaService:
 
             if not self.documents:
                 raise DocumentLoadError("No documents found in data directory")
+
+            # Add repository metadata to documents
+            for doc in self.documents:
+                doc.metadata["repository_id"] = str(repository_id)  # Need to pass repository_id here
 
             self.index = VectorStoreIndex.from_documents(
                 self.documents,
@@ -153,16 +146,22 @@ class LlamaService:
             if not self.vector_store:
                 raise ChatError("Vector store not initialized")
 
+            # Update metadata filter for specific repository
+            self.vector_store.metadata_filters = {"repository_id": str(repository_id)}
+
             # Create index from vector store
             index = await VectorStoreIndex.from_vector_store(
                 vector_store=self.vector_store
             )
 
-            # Create chat engine
+            # Create chat engine with metadata filtering
             chat_engine = index.as_chat_engine(
                 chat_mode="condense_plus_context",
                 verbose=True,
-                similarity_top_k=5
+                similarity_top_k=5,
+                context_window=4096,
+                num_output_tokens=1024,
+                metadata_filters={"repository_id": str(repository_id)}
             )
 
             # Format chat history

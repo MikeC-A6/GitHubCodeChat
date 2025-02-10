@@ -10,6 +10,8 @@ export const repositories = pgTable("repositories", {
   description: text("description"),
   files: jsonb("files").notNull(),
   status: text("status").notNull().default("pending"),
+  branch: text("branch").notNull().default("main"),
+  path: text("path").notNull().default(""),
   processedAt: timestamp("processed_at"),
   embeddings: text("embeddings").array(),
 });
@@ -29,6 +31,8 @@ export const insertRepositorySchema = createInsertSchema(repositories).pick({
   description: true,
   files: true,
   status: true,
+  branch: true,
+  path: true,
 });
 
 export const insertMessageSchema = createInsertSchema(messages).pick({

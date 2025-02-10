@@ -10,10 +10,24 @@ export default function RepositoryProcessor() {
 
   const processRepo = useMutation({
     mutationFn: async (url: string) => {
+      // First fetch repository data from GitHub
+      const githubResponse = await apiRequest("POST", "/api/github/process", {
+        url,
+      });
+      const githubData = await githubResponse.json();
+
+      // Then create repository with complete data
       const response = await apiRequest("POST", "/api/repositories", {
         url,
+        name: githubData.repository.name,
+        owner: githubData.repository.owner,
+        description: githubData.repository.description,
+        files: githubData.repository.files,
         status: "pending",
+        branch: githubData.repository.branch,
+        path: githubData.repository.path,
       });
+      
       return response.json();
     },
     onSuccess: () => {
