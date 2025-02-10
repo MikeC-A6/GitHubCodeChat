@@ -1,44 +1,74 @@
 from llama_index import VectorStoreIndex, ServiceContext
 from llama_index.vector_stores import PGVectorStore
 from llama_index.llms import Gemini
+from llama_index.embeddings import OpenAIEmbedding
 import os
+from typing import List, Dict, Any
 
 class LlamaService:
     def __init__(self):
+        # Initialize Gemini LLM
         self.llm = Gemini(
             api_key=os.getenv("GEMINI_API_KEY"),
             model_name="gemini-2.0-flash"
         )
-        
-        self.vector_store = PGVectorStore(
-            connection_string=os.getenv("DATABASE_URL"),
-            table_name="embeddings"
-        )
-        
-        self.service_context = ServiceContext.from_defaults(
-            llm=self.llm,
-            embed_model="local:BAAI/bge-small-en-v1.5"
+
+        # Initialize OpenAI embeddings
+        self.embed_model = OpenAIEmbedding(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            model_name="text-embedding-3-large"
         )
 
-    async def chat(self, repository_id: int, message: str, chat_history: list[dict]):
-        # Retrieve the index for this repository
-        index = VectorStoreIndex.from_vector_store(
-            vector_store=self.vector_store,
-            service_context=self.service_context
+        # Initialize pgvector store
+        self.vector_store = PGVectorStore(
+            connection_string=os.getenv("DATABASE_URL"),
+            table_name="embeddings",
+            embed_dim=3072  # dimension for text-embedding-3-large
         )
-        
-        # Create chat engine
-        chat_engine = index.as_chat_engine(
-            chat_mode="condense_plus_context",
-            verbose=True
+
+        # Initialize service context
+        self.service_context = ServiceContext.from_defaults(
+            llm=self.llm,
+            embed_model=self.embed_model
         )
-        
-        # Get response
-        response = await chat_engine.chat(
-            message,
-            chat_history=[
-                (msg["role"], msg["content"]) for msg in chat_history
+
+    async def chat(
+        self, 
+        repository_id: int, 
+        message: str, 
+        chat_history: List[Dict[str, str]]
+    ) -> str:
+        """
+        Generate response using Gemini model with context from pgvector
+        """
+        try:
+            # Create index from vector store
+            index = VectorStoreIndex.from_vector_store(
+                vector_store=self.vector_store,
+                service_context=self.service_context
+            )
+
+            # Create chat engine with similarity search
+            chat_engine = index.as_chat_engine(
+                chat_mode="condense_plus_context",
+                verbose=True,
+                similarity_top_k=5  # number of relevant chunks to retrieve
+            )
+
+            # Format chat history
+            formatted_history = [
+                (msg["role"], msg["content"]) 
+                for msg in chat_history
             ]
-        )
-        
-        return response.response
+
+            # Generate response
+            response = await chat_engine.achat(
+                message=message,
+                chat_history=formatted_history
+            )
+
+            return response.response
+
+        except Exception as e:
+            print(f"Error in chat service: {str(e)}")
+            raise

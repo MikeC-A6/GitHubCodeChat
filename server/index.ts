@@ -1,10 +1,34 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { createProxyMiddleware } from "http-proxy-middleware";
+import { spawn } from "child_process";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Start FastAPI backend
+const pythonProcess = spawn("python3", ["-m", "uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]);
+
+pythonProcess.stdout.on("data", (data) => {
+  log(`Python: ${data}`, "fastapi");
+});
+
+pythonProcess.stderr.on("data", (data) => {
+  log(`Python error: ${data}`, "fastapi");
+});
+
+// Add proxy middleware for FastAPI backend
+app.use("/api/github", createProxyMiddleware({
+  target: "http://localhost:8000",
+  changeOrigin: true,
+}));
+
+app.use("/api/chat", createProxyMiddleware({
+  target: "http://localhost:8000",
+  changeOrigin: true,
+}));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -47,17 +71,12 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client
   const PORT = 5000;
   server.listen(PORT, "0.0.0.0", () => {
     log(`serving on port ${PORT}`);
