@@ -5,19 +5,59 @@ import os
 from typing import Dict, List, Any
 from os import environ
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GitHubService:
     def __init__(self):
         # Get token from Replit secrets
-        github_token = environ.get('GITHUB_TOKEN')
-        if not github_token:
-            raise ValueError("GITHUB_TOKEN not found in environment variables")
+        github_token = os.environ.get('GITHUB_TOKEN') or environ.get('REPLIT_GITHUB_TOKEN')
+        
+        # Log token presence (not the actual token)
+        if github_token:
+            logger.info("GitHub token found in environment")
+        else:
+            logger.error("GitHub token not found in environment variables")
+            raise ValueError("GitHub token not found in environment variables. Please set GITHUB_TOKEN in Replit secrets.")
             
-        self.transport = AIOHTTPTransport(
-            url='https://api.github.com/graphql',
-            headers={'Authorization': f'Bearer {github_token}'}
-        )
-        self.client = Client(transport=self.transport)
+        # Initialize GraphQL client
+        try:
+            self.transport = AIOHTTPTransport(
+                url='https://api.github.com/graphql',
+                headers={'Authorization': f'Bearer {github_token}'}
+            )
+            self.client = Client(transport=self.transport)
+            logger.info("GitHub GraphQL client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize GitHub client: {str(e)}")
+            raise
+
+    async def get_repository_data(self, url: str) -> Dict[str, Any]:
+        """
+        Get repository data including metadata and files
+        """
+        try:
+            logger.info(f"=== Starting GitHub repository fetch ===")
+            logger.info(f"URL: {url}")
+            
+            # Parse the GitHub URL
+            logger.info("Parsing GitHub URL...")
+            repo_info = self._parse_github_url(url)
+            logger.info(f"Parsed repository info: {repo_info}")
+            
+            # Fetch repository data
+            logger.info("Fetching repository data from GitHub API...")
+            repo_data = await self.fetch_repository(url)
+            logger.info(f"Successfully fetched repository: {repo_data.get('name', 'unknown')}")
+            logger.info(f"Number of files: {len(repo_data.get('files', []))}")
+            logger.info("=== GitHub repository fetch completed ===")
+            
+            return repo_data
+        except Exception as e:
+            logger.error("=== GitHub repository fetch failed ===")
+            logger.error(f"Error fetching repository data: {str(e)}", exc_info=True)
+            raise
 
     def _parse_github_url(self, url: str) -> Dict[str, str]:
         """
@@ -53,6 +93,7 @@ class GitHubService:
             branch = parts[6]
             path = '/'.join(parts[7:]) if len(parts) > 7 else ""
         
+        logger.info(f"Parsed GitHub URL - owner: {owner}, repo: {repo}, branch: {branch}, path: {path}")
         return {
             "owner": owner,
             "name": repo,
@@ -70,6 +111,7 @@ class GitHubService:
             
             # Construct the expression for the specific path
             expression = f"{repo_info['branch']}:{repo_info['path']}" if repo_info['path'] else f"{repo_info['branch']}:"
+            logger.info(f"Using Git expression: {expression}")
     
             # GraphQL query to fetch repository data
             query = gql("""
@@ -100,8 +142,10 @@ class GitHubService:
                 "name": repo_info["name"],
                 "expression": expression
             }
-    
+            
+            logger.info(f"Executing GraphQL query with variables: {variables}")
             result = await self.client.execute_async(query, variable_values=variables)
+            
             if not result or "repository" not in result:
                 raise ValueError(f"Repository {repo_info['owner']}/{repo_info['name']} not found")
             
@@ -110,8 +154,10 @@ class GitHubService:
     
             # Process and format the response
             files = self._process_files(result["repository"]["object"]["entries"])
+            logger.info(f"Processed {len(files)} files from repository")
     
             return {
+                "url": url,
                 "owner": repo_info["owner"],
                 "name": repo_info["name"],
                 "description": result["repository"].get("description", ""),
@@ -122,8 +168,10 @@ class GitHubService:
             }
     
         except ValueError as e:
+            logger.error(f"Value error in fetch_repository: {str(e)}")
             raise
         except Exception as e:
+            logger.error(f"Error in fetch_repository: {str(e)}")
             raise ValueError(f"Failed to fetch repository: {str(e)}")
 
     def _process_files(self, entries: List[Dict[str, Any]]) -> List[Dict[str, str]]:

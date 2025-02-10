@@ -12,30 +12,45 @@ export default function RepositoryProcessor() {
   const processRepo = useMutation({
     mutationFn: async (url: string) => {
       try {
-        const response = await apiRequest("POST", "/api/github/process", {
-          url,
+        console.log('Starting repository processing for URL:', url);
+        
+        // Log the request details
+        const requestBody = { url };
+        console.log('Request body:', requestBody);
+        
+        const response = await apiRequest("POST", "/github/process", requestBody);
+        
+        console.log('Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries())
         });
         
         if (!response.ok) {
           const errorText = await response.text();
+          console.error('Error response:', errorText);
           throw new Error(`Failed to process repository: ${errorText}`);
         }
 
-        return response.json();
+        const data = await response.json();
+        console.log('Success response:', data);
+        return data;
       } catch (error) {
         console.error('Error processing repository:', error);
         throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Repository processing succeeded:', data);
       toast({
         title: "Repository submitted",
         description: "The repository is being processed.",
       });
       // Refresh the repositories list
-      queryClient.invalidateQueries({ queryKey: ["/api/github/repositories"] });
+      queryClient.invalidateQueries({ queryKey: ["/github/repositories"] });
     },
     onError: (error: Error) => {
+      console.error('Repository processing failed:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to process repository.",
@@ -51,7 +66,10 @@ export default function RepositoryProcessor() {
           <CardTitle>Repository Processor</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <RepoForm onSubmit={(url) => processRepo.mutate(url)} />
+          <RepoForm onSubmit={(url) => {
+            console.log('Form submitted with URL:', url);
+            processRepo.mutate(url);
+          }} />
           <ProcessingStatus />
         </CardContent>
       </Card>

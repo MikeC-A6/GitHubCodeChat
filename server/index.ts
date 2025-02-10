@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { createProxyMiddleware, type Options } from "http-proxy-middleware";
 import { spawn } from "child_process";
 import path from "path";
+import { IncomingMessage, ServerResponse, ClientRequest } from "http";
 
 const app = express();
 app.use(express.json());
@@ -48,43 +49,70 @@ pythonProcess.on("close", (code) => {
 // Wait for FastAPI to start before setting up proxy
 setTimeout(() => {
   // Add proxy middleware for FastAPI backend
-  const proxyOptions: Options = {
+  app.use("/api", createProxyMiddleware({
     target: "http://localhost:8000",
     changeOrigin: true,
     pathRewrite: {
       '^/api': ''  // Remove /api prefix when forwarding
     },
-    onProxyError: (err, req, res) => {
-      log(`Proxy error: ${err}`, "fastapi");
+    onProxyReq: (proxyReq: ClientRequest, req: express.Request, res: express.Response) => {
+      // Log the original request details
+      log(`Proxying ${req.method} ${req.url}`, "fastapi");
+      log(`Request headers: ${JSON.stringify(req.headers)}`, "fastapi");
+      
+      // If there's a request body, forward it correctly
+      if (req.body) {
+        const bodyData = JSON.stringify(req.body);
+        log(`Request body: ${bodyData}`, "fastapi");
+        
+        // Update header
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+        
+        // Write body to request
+        proxyReq.write(bodyData);
+        proxyReq.end();
+      }
+    },
+    onProxyRes: (proxyRes: IncomingMessage, req: express.Request, res: express.Response) => {
+      log(`Proxy response: ${proxyRes.statusCode} for ${req.method} ${req.url}`, "fastapi");
+      
+      // Log response body for debugging
+      let responseBody = '';
+      proxyRes.on('data', (chunk) => {
+        responseBody += chunk;
+      });
+      proxyRes.on('end', () => {
+        log(`Response body: ${responseBody}`, "fastapi");
+      });
+    },
+    onError: (err: Error, req: express.Request, res: express.Response) => {
+      log(`Proxy error: ${err.message}`, "fastapi");
       res.writeHead(500, {
         'Content-Type': 'application/json',
       });
-      res.end(JSON.stringify({ error: "Failed to connect to Python backend" }));
+      res.end(JSON.stringify({ 
+        error: "Failed to connect to Python backend",
+        details: err.message 
+      }));
     }
-  };
+  } as Options));
 
-  app.use("/api", createProxyMiddleware(proxyOptions));
+  // Add request logging middleware
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    log(`Incoming request: ${req.method} ${req.url}`, "express");
+    next();
+  });
 
-  app.use((req, res, next) => {
+  // Response logging middleware
+  app.use((req: Request, res: Response, next: NextFunction) => {
     const start = Date.now();
     const path = req.path;
-    let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-    const originalResJson = res.json;
-    res.json = function (bodyJson, ...args) {
-      capturedJsonResponse = bodyJson;
-      return originalResJson.apply(res, [bodyJson, ...args]);
-    };
 
     res.on("finish", () => {
       const duration = Date.now() - start;
-      if (path.startsWith("/api")) {
-        let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-        if (capturedJsonResponse) {
-          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-        }
-        log(logLine);
-      }
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      log(logLine, "express");
     });
 
     next();

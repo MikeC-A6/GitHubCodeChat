@@ -8,19 +8,32 @@ import { apiRequest } from "@/lib/queryClient";
 
 export default function ProcessingStatus() {
   const { data: repositories, error, isLoading } = useQuery<Repository[]>({
-    queryKey: ["/api/github/repositories"],
+    queryKey: ["/github/repositories"],
     queryFn: async () => {
       try {
-        const response = await apiRequest("GET", "/api/github/repositories");
+        console.log('Fetching repositories...');
+        const response = await apiRequest("GET", "/github/repositories");
+        console.log('Repository response:', response.status);
+        
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error fetching repositories:', errorText);
           throw new Error("Failed to fetch repositories");
         }
-        return response.json();
+        
+        const data = await response.json();
+        console.log('Repositories fetched:', data);
+        return data;
       } catch (error) {
         console.error("Error fetching repositories:", error);
         throw error;
       }
-    }
+    },
+    // Disable retries and automatic refetching
+    retry: false,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    staleTime: 0,
   });
 
   if (isLoading) {
@@ -44,23 +57,18 @@ export default function ProcessingStatus() {
   return (
     <ScrollArea className="h-[400px]">
       <div className="space-y-4">
-        {repositories.map((repo) => (
+        {repositories.map((repo: Repository) => (
           <Card key={repo.id}>
             <CardContent className="pt-6">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-medium">{repo.owner}/{repo.name}</h3>
-                <span className="capitalize text-sm bg-primary/10 px-2 py-1 rounded">
-                  {repo.status}
-                </span>
+                <div>
+                  <h3 className="font-semibold">{repo.name}</h3>
+                  <p className="text-sm text-gray-500">{repo.status}</p>
+                </div>
+                {repo.status === 'processing' && (
+                  <Progress value={100} className="w-[100px]" />
+                )}
               </div>
-              
-              {repo.status === "processing" && (
-                <Progress value={Math.random() * 100} className="mb-2" />
-              )}
-              
-              <p className="text-sm text-muted-foreground">
-                {repo.description || "No description available"}
-              </p>
             </CardContent>
           </Card>
         ))}
