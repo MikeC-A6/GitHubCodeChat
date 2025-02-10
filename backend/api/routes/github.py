@@ -31,50 +31,56 @@ async def get_repositories() -> List[Dict[str, Any]]:
 @router.post("/process")
 async def process_repository(request: RepositoryRequest) -> Dict[str, Any]:
     """
-    Process a GitHub repository:
-    1. Fetch repository content using GitHub GraphQL API
-    2. Store repository data in PostgreSQL
-    3. Generate embeddings for the code files
-    4. Store results in Pinecone
+    Step 1: Process repository - fetch from GitHub and store in PostgreSQL
     """
     try:
-        # Fetch repository content
-        repo_data = await github_service.fetch_repository(request.url)
+        # Fetch repository data from GitHub
+        repo_data = await github_service.get_repository_data(request.url)
         
-        if not repo_data.get("files"):
-            raise HTTPException(
-                status_code=400,
-                detail="No files found in repository"
-            )
-
-        # Store repository in database
-        repository = await db_service.create_repository({
-            "url": request.url,
-            "name": repo_data["name"],
-            "owner": repo_data["owner"],
-            "description": repo_data["description"],
-            "files": repo_data["files"],
-            "status": "pending",
-            "branch": repo_data["branch"],
-            "path": repo_data["path"],
-            "vectorized": False
-        })
-
-        # Generate embeddings (we'll integrate with Pinecone in the next phase)
-        embeddings = await embeddings_service.generate_embeddings(repo_data["files"])
-
+        # Store in database
+        repo_id = await db_service.store_repository(repo_data)
+        
         return {
             "status": "success",
-            "repository": repository,
-            "embeddings": embeddings
+            "message": "Repository processed and stored successfully",
+            "repository_id": repo_id
         }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to process repository: {str(e)}"
+        )
+
+@router.post("/generate-embeddings/{repo_id}")
+async def generate_embeddings(repo_id: str) -> Dict[str, Any]:
+    """
+    Step 2: Generate embeddings for a processed repository
+    """
+    try:
+        # Get repository files from database
+        files = await db_service.get_repository_files(repo_id)
+        
+        if not files:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No files found for repository {repo_id}"
+            )
+        
+        # Generate embeddings
+        embeddings = await embeddings_service.generate_embeddings(files)
+        
+        # Store embeddings in database
+        await db_service.store_embeddings(repo_id, embeddings)
+        
+        return {
+            "status": "success",
+            "message": "Embeddings generated and stored successfully",
+            "repository_id": repo_id
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate embeddings: {str(e)}"
         )

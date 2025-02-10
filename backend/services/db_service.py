@@ -20,15 +20,15 @@ class DatabaseService:
         self.db_url = os.environ.get("DATABASE_URL")
         if not self.db_url:
             # Construct URL from Replit secrets
-            username = os.environ.get("REPLIT_DB_USERNAME", "postgres")
-            password = os.environ.get("REPLIT_DB_PASSWORD", "postgres")
-            host = os.environ.get("REPLIT_DB_HOST", "localhost")
-            port = os.environ.get("REPLIT_DB_PORT", "5432")
-            database = os.environ.get("REPLIT_DB_NAME", "postgres")
-            
+            username = os.environ.get("PGUSER", "postgres")
+            password = os.environ.get("PGPASSWORD", "postgres")
+            host = os.environ.get("PGHOST", "localhost")
+            port = os.environ.get("PGPORT", "5432")
+            database = os.environ.get("PGDATABASE", "postgres")
+
             self.db_url = f"postgresql://{username}:{password}@{host}:{port}/{database}"
             logger.info("Using Replit database configuration")
-        
+
         logger.info("Database URL configured")
 
     async def initialize(self):
@@ -39,37 +39,19 @@ class DatabaseService:
                 self.db_url,
                 ssl="require",  # Required for Replit's PostgreSQL
                 min_size=1,     # Minimum number of connections
-                max_size=10     # Maximum number of connections
+                max_size=10,    # Maximum number of connections
+                command_timeout=60  # Increase timeout to 60 seconds
             )
-            
-            # Try different possible schema locations
-            possible_paths = [
-                Path("server/db/schema.sql"),
-                Path("db/schema.sql"),
-                Path("schema.sql"),
-                Path("workspace/server/db/schema.sql"),
-                Path("workspace/db/schema.sql"),
-            ]
-            
-            schema_sql = None
-            schema_path = None
-            
-            for path in possible_paths:
-                if path.exists():
-                    schema_path = path
-                    schema_sql = path.read_text()
-                    logger.info(f"Found schema at {path}")
-                    break
-            
-            if schema_sql:
+
+            schema_path = Path("schema.sql")
+            if schema_path.exists():
+                schema_sql = schema_path.read_text()
                 async with self.pool.acquire() as conn:
                     await conn.execute(schema_sql)
                 logger.info("Database schema initialized successfully")
             else:
-                paths_checked = "\n".join(str(p) for p in possible_paths)
-                logger.error(f"Could not find schema.sql file. Checked:\n{paths_checked}")
-                raise DatabaseError("Schema file not found")
-                
+                raise DatabaseError("Schema file not found at schema.sql")
+
         except Exception as e:
             logger.error(f"Failed to initialize database: {str(e)}")
             raise DatabaseError(f"Failed to initialize database: {str(e)}")
@@ -82,7 +64,8 @@ class DatabaseService:
                     self.db_url,
                     ssl="require",  # Required for Replit's PostgreSQL
                     min_size=1,     # Minimum number of connections
-                    max_size=10     # Maximum number of connections
+                    max_size=10,    # Maximum number of connections
+                    command_timeout=60  # Increase timeout to 60 seconds
                 )
             except Exception as e:
                 logger.error(f"Failed to create database pool: {str(e)}")
@@ -90,18 +73,13 @@ class DatabaseService:
         return self.pool
 
     async def create_repository(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Create a new repository record
-        
-        Args:
-            data: Repository data including url, name, owner, files, etc.
-        """
+        """Create a new repository record"""
         pool = await self.get_pool()
         async with pool.acquire() as conn:
             try:
                 # Convert files to JSON string for storage
                 files_json = json.dumps(data["files"])
-                
+
                 # Insert repository
                 row = await conn.fetchrow("""
                     INSERT INTO repositories (
@@ -127,8 +105,7 @@ class DatabaseService:
                     data.get("vectorized", False)
                 )
 
-                # Convert row to dict
-                return {
+                result = {
                     "id": row["id"],
                     "url": row["url"],
                     "name": row["name"],
@@ -142,10 +119,48 @@ class DatabaseService:
                     "processed_at": row["processed_at"],
                     "created_at": row["created_at"]
                 }
+                logger.info(f"Successfully created repository: {result['owner']}/{result['name']}")
+                return result
 
             except Exception as e:
                 logger.error(f"Failed to create repository: {str(e)}")
                 raise DatabaseError(f"Failed to create repository: {str(e)}")
+
+    async def get_repositories(self) -> List[Dict[str, Any]]:
+        """Get all repositories"""
+        pool = await self.get_pool()
+        async with pool.acquire() as conn:
+            try:
+                rows = await conn.fetch("""
+                    SELECT 
+                        id, url, name, owner, description,
+                        files, status, branch, path, vectorized,
+                        processed_at, created_at
+                    FROM repositories 
+                    ORDER BY created_at DESC
+                    """)
+
+                results = [{
+                    "id": row["id"],
+                    "url": row["url"],
+                    "name": row["name"],
+                    "owner": row["owner"],
+                    "description": row["description"],
+                    "files": json.loads(row["files"]),
+                    "status": row["status"],
+                    "branch": row["branch"],
+                    "path": row["path"],
+                    "vectorized": row["vectorized"],
+                    "processed_at": row["processed_at"],
+                    "created_at": row["created_at"]
+                } for row in rows]
+
+                logger.info(f"Successfully fetched {len(results)} repositories")
+                return results
+
+            except Exception as e:
+                logger.error(f"Failed to fetch repositories: {str(e)}")
+                raise DatabaseError(f"Failed to fetch repositories: {str(e)}")
 
     async def get_repository(self, id: int) -> Dict[str, Any]:
         """Get a repository by ID"""
@@ -234,35 +249,6 @@ class DatabaseService:
                 logger.error(f"Failed to update repository status: {str(e)}")
                 raise DatabaseError(f"Failed to update repository status: {str(e)}")
 
-    async def get_repositories(self) -> List[Dict[str, Any]]:
-        """Get all repositories"""
-        pool = await self.get_pool()
-        async with pool.acquire() as conn:
-            try:
-                rows = await conn.fetch("""
-                    SELECT 
-                        id, url, name, owner, description,
-                        files, status, branch, path, vectorized,
-                        processed_at, created_at
-                    FROM repositories 
-                    ORDER BY created_at DESC
-                    """)
-                
-                return [{
-                    "id": row["id"],
-                    "url": row["url"],
-                    "name": row["name"],
-                    "owner": row["owner"],
-                    "description": row["description"],
-                    "files": json.loads(row["files"]),
-                    "status": row["status"],
-                    "branch": row["branch"],
-                    "path": row["path"],
-                    "vectorized": row["vectorized"],
-                    "processed_at": row["processed_at"],
-                    "created_at": row["created_at"]
-                } for row in rows]
-
-            except Exception as e:
-                logger.error(f"Failed to fetch repositories: {str(e)}")
-                raise DatabaseError(f"Failed to fetch repositories: {str(e)}") 
+    async def close(self):
+        if self.pool:
+            await self.pool.close()
