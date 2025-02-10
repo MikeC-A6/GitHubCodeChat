@@ -10,7 +10,7 @@ class LlamaService:
         # Initialize Gemini LLM
         self.llm = Gemini(
             api_key=os.getenv("GEMINI_API_KEY"),
-            model_name="gemini-2.0-flash"
+            model_name="models/gemini-pro"  # Updated model name format
         )
 
         # Initialize OpenAI embeddings

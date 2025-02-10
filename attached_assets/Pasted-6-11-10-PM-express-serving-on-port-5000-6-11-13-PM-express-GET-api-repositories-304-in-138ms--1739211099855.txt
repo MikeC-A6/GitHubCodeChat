@@ -1,0 +1,84 @@
+6:11:10 PM [express] serving on port 5000
+6:11:13 PM [express] GET /api/repositories 304 in 138ms :: []
+6:11:15 PM [express] GET /api/repositories 304 in 22ms :: []
+6:11:15 PM [fastapi] Python error: Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/uvicorn/__main__.py", line 4, in <module>
+
+6:11:15 PM [fastapi] Python error:     uvicorn.main()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/click/core.py", line 1161, in __call__
+    return self.main(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/click/core.py", line 1082, in main
+    rv = self.invoke(ctx)
+         ^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/click/core.py", line 1443, in invoke
+
+6:11:15 PM [fastapi] Python error:     return ctx.invoke(self.callback, **ctx.params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/click/core.py", line 788, in invoke
+
+6:11:15 PM [fastapi] Python error:     return __callback(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/uvicorn/main.py", line 412, in main
+    run(
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/uvicorn/main.py", line 579, in run
+
+6:11:15 PM [fastapi] Python error:     server.run()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/uvicorn/server.py", line 66, in run
+    return asyncio.run(self.serve(sockets=sockets))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/clx0mcir7qw8zk36zbr4jra789g3knf6-python3-3.11.10/lib/python3.11/asyncio/runners.py", line 190, in run
+
+6:11:15 PM [fastapi] Python error:     return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/nix/store/clx0mcir7qw8zk36zbr4jra789g3knf6-python3-3.11.10/lib/python3.11/asyncio/runners.py", line 118, in run
+
+6:11:15 PM [fastapi] Python error:     return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/clx0mcir7qw8zk36zbr4jra789g3knf6-python3-3.11.10/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+
+6:11:15 PM [fastapi] Python error:     return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/uvicorn/server.py", line 70, in serve
+
+6:11:15 PM [fastapi] Python error:     await self._serve(sockets)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/uvicorn/server.py", line 77, in _serve
+    config.load()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/uvicorn/config.py", line 435, in load
+    self.loaded_app = import_from_string(self.app)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/clx0mcir7qw8zk36zbr4jra789g3knf6-python3-3.11.10/lib/python3.11/importlib/__init__.py", line 126, in import_module
+
+6:11:15 PM [fastapi] Python error:     return _bootstrap._gcd_import(name[level:], package, level)
+
+6:11:15 PM [fastapi] Python error:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/home/runner/workspace/backend/api/main.py", line 3, in <module>
+    from backend.api.routes import github, chat
+  File "/home/runner/workspace/backend/api/routes/chat.py", line 7, in <module>
+    llama_service = LlamaService()
+                    ^^^^^^^^^^^^^^
+  File "/home/runner/workspace/backend/services/llama_service.py", line 11, in __init__
+
+6:11:15 PM [fastapi] Python error:     self.llm = Gemini(
+               ^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/llama_index/llms/gemini/base.py", line 149, in __init__
+    model_meta = genai.get_model(model)
+                 ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/google/generativeai/models.py", line 55, in get_model
+    name = model_types.make_model_name(name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/google/generativeai/types/model_types.py", line 365, in make_model_name
+
+6:11:15 PM [fastapi] Python error:     raise ValueError(
+ValueError: Invalid model name: 'gemini-2.0-flash'. Model names should start with 'models/' or 'tunedModels/'.
