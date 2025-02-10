@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertRepositorySchema, insertMessageSchema } from "@shared/schema";
+import { log } from "./vite";
 
 export function registerRoutes(app: Express): Server {
   // Repository endpoints
@@ -10,7 +11,11 @@ export function registerRoutes(app: Express): Server {
       const repositories = await storage.getRepositories();
       res.json(repositories);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch repositories" });
+      log(`Error fetching repositories: ${error}`);
+      res.status(500).json({ 
+        message: "Failed to fetch repositories",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -22,7 +27,11 @@ export function registerRoutes(app: Express): Server {
       }
       res.json(repository);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch repository" });
+      log(`Error fetching repository ${req.params.id}: ${error}`);
+      res.status(500).json({ 
+        message: "Failed to fetch repository",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -32,7 +41,11 @@ export function registerRoutes(app: Express): Server {
       const repository = await storage.createRepository(data);
       res.status(201).json(repository);
     } catch (error) {
-      res.status(400).json({ message: "Invalid repository data" });
+      log(`Error creating repository: ${error}`);
+      res.status(400).json({ 
+        message: "Invalid repository data",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -42,7 +55,11 @@ export function registerRoutes(app: Express): Server {
       const messages = await storage.getMessages(Number(req.params.id));
       res.json(messages);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch messages" });
+      log(`Error fetching messages for repository ${req.params.id}: ${error}`);
+      res.status(500).json({ 
+        message: "Failed to fetch messages",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -55,7 +72,11 @@ export function registerRoutes(app: Express): Server {
       const message = await storage.createMessage(data);
       res.status(201).json(message);
     } catch (error) {
-      res.status(400).json({ message: "Invalid message data" });
+      log(`Error creating message for repository ${req.params.id}: ${error}`);
+      res.status(400).json({ 
+        message: "Invalid message data",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 

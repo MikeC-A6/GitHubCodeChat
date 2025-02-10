@@ -10,28 +10,28 @@ export default function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center gap-8">
           <Link href="/">
-            <a className="text-xl font-bold">Repository Processor</a>
+            <span className="text-xl font-bold cursor-pointer">Repository Processor</span>
           </Link>
-          
+
           <div className="flex gap-4">
             <Link href="/">
-              <a className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-md transition-colors",
+              <span className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer",
                 location === "/" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
               )}>
                 <GitHubLogoIcon className="h-5 w-5" />
                 Process Repository
-              </a>
+              </span>
             </Link>
-            
+
             <Link href="/chat">
-              <a className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-md transition-colors",
+              <span className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer",
                 location === "/chat" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
               )}>
                 <ChatBubbleIcon className="h-5 w-5" />
                 Chat
-              </a>
+              </span>
             </Link>
           </div>
         </div>
