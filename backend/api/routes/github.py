@@ -82,18 +82,34 @@ async def process_repository(request: RepositoryRequest) -> JSONResponse:
             content={"detail": f"Failed to process repository: {str(e)}"}
         )
 
-@router.post("/generate-embeddings/{repo_id}")
-async def generate_embeddings(repo_id: str) -> Dict[str, Any]:
+@router.post("/repositories/{repo_id}/embed")
+async def generate_embeddings(repo_id: int) -> Dict[str, Any]:
     """
-    Step 2: Generate embeddings for a processed repository
+    Generate embeddings for a processed repository and store them in the vector store
     """
     try:
         logger.info(f"Starting embeddings generation for repository ID: {repo_id}")
         
-        # Get repository files from database
-        logger.info("Fetching repository files from database...")
-        files = await db_service.get_repository_files(repo_id)
+        # Get repository from database
+        repository = await db_service.get_repository(repo_id)
+        if not repository:
+            logger.warning(f"Repository {repo_id} not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Repository {repo_id} not found"
+            )
         
+        # Check if repository is already being processed
+        if repository.get("embedding_status") == "processing":
+            logger.warning(f"Repository {repo_id} is already being processed")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Repository {repo_id} is already being processed"
+            )
+        
+        # Get repository files
+        logger.info("Fetching repository files from database...")
+        files = repository.get("files", [])
         if not files:
             logger.warning(f"No files found for repository {repo_id}")
             raise HTTPException(
@@ -103,27 +119,73 @@ async def generate_embeddings(repo_id: str) -> Dict[str, Any]:
         
         logger.info(f"Found {len(files)} files to process")
         
-        # Generate embeddings
-        logger.info("Generating embeddings...")
-        embeddings = await embeddings_service.generate_embeddings(files)
-        logger.info(f"Successfully generated embeddings for {len(embeddings)} files")
+        # Define status update callback
+        async def update_status(status: str, message: str):
+            await db_service.update_embedding_status(
+                repo_id=repo_id,
+                status=status,
+                error_message=message if status == "failed" else None
+            )
         
-        # Store embeddings in database
-        logger.info("Storing embeddings in database...")
-        await db_service.store_embeddings(repo_id, embeddings)
-        logger.info("Successfully stored embeddings")
+        # Process repository and generate embeddings
+        logger.info("Processing repository and generating embeddings...")
+        await embeddings_service.process_repository(
+            repo_id=repo_id,
+            files=files,
+            status_callback=update_status
+        )
         
         return {
             "status": "success",
-            "message": "Embeddings generated and stored successfully",
+            "message": "Embedding generation started successfully",
             "repository_id": repo_id
         }
+        
     except HTTPException as e:
         logger.error(f"HTTP error in embeddings generation: {str(e)}")
         raise e
     except Exception as e:
         logger.error(f"Error generating embeddings: {str(e)}", exc_info=True)
+        # Update status in database
+        try:
+            await db_service.update_embedding_status(
+                repo_id=repo_id,
+                status="failed",
+                error_message=str(e)
+            )
+        except Exception as status_e:
+            logger.error(f"Failed to update error status: {str(status_e)}")
+            
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate embeddings: {str(e)}"
+        )
+
+@router.get("/repositories/{repo_id}/embedding-status")
+async def get_embedding_status(repo_id: int) -> Dict[str, Any]:
+    """
+    Get the current embedding status for a repository
+    """
+    try:
+        repository = await db_service.get_repository(repo_id)
+        if not repository:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Repository {repo_id} not found"
+            )
+            
+        return {
+            "status": repository.get("status", "pending"),
+            "error": repository.get("error_message"),
+            "repository_id": repo_id,
+            "vectorized": repository.get("vectorized", False)
+        }
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching embedding status: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch embedding status: {str(e)}"
         )

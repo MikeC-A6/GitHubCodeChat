@@ -11,13 +11,11 @@ logger = logging.getLogger(__name__)
 
 class GitHubService:
     def __init__(self):
-        # Get token from Replit secrets
+        # Get token from environment variables or Replit secrets
         github_token = os.environ.get('GITHUB_TOKEN') or environ.get('REPLIT_GITHUB_TOKEN')
         
         # Log token presence (not the actual token)
-        if github_token:
-            logger.info("GitHub token found in environment")
-        else:
+        if not github_token:
             logger.error("GitHub token not found in environment variables")
             raise ValueError("GitHub token not found in environment variables. Please set GITHUB_TOKEN in Replit secrets.")
             
@@ -61,39 +59,30 @@ class GitHubService:
 
     def _parse_github_url(self, url: str) -> Dict[str, str]:
         """
-        Parse GitHub URL to extract owner, repo name, branch, and path
-        Example URLs:
-        - https://github.com/owner/repo
-        - https://github.com/owner/repo/tree/branch
-        - https://github.com/owner/repo/tree/branch/path/to/dir
+        Parse GitHub URL to extract {owner, name, branch, path}.
+        e.g. https://github.com/owner/repo/tree/my-branch/src
         """
         if not url.startswith("https://github.com/"):
             raise ValueError("Invalid GitHub URL. Must start with 'https://github.com/'")
 
         url = url.rstrip('/')
         parts = url.split('/')
-        
         if len(parts) < 5:
             raise ValueError("Invalid GitHub URL. Must be in format: https://github.com/owner/repo[/tree/branch/path]")
-        
-        # Basic owner/repo extraction
+
         owner = parts[3]
         repo = parts[4]
-        
-        # Default values
         branch = "main"
         path = ""
-        
-        # Check if URL contains tree (indicating branch and path)
-        if len(parts) > 5:
-            if parts[5] != "tree":
-                raise ValueError("Invalid GitHub URL. Directory path must start with '/tree/'")
+
+        if len(parts) > 5 and parts[5] == "tree":
+            # At least: https://github.com/owner/repo/tree/branch
             if len(parts) < 7:
                 raise ValueError("Invalid GitHub URL. Missing branch name after '/tree/'")
             branch = parts[6]
-            path = '/'.join(parts[7:]) if len(parts) > 7 else ""
-        
-        logger.info(f"Parsed GitHub URL - owner: {owner}, repo: {repo}, branch: {branch}, path: {path}")
+            if len(parts) > 7:
+                path = '/'.join(parts[7:])  # e.g. src/something
+
         return {
             "owner": owner,
             "name": repo,
@@ -103,30 +92,71 @@ class GitHubService:
 
     async def fetch_repository(self, url: str) -> Dict[str, Any]:
         """
-        Fetch repository metadata and file contents using GitHub GraphQL API
+        Public method to fetch an entire repo (metadata + all files recursively).
         """
-        try:
-            # Parse the GitHub URL
-            repo_info = self._parse_github_url(url)
-            
-            # Construct the expression for the specific path
-            expression = f"{repo_info['branch']}:{repo_info['path']}" if repo_info['path'] else f"{repo_info['branch']}:"
-            logger.info(f"Using Git expression: {expression}")
-    
-            # GraphQL query to fetch repository data
-            query = gql("""
-                query($owner: String!, $name: String!, $expression: String!) {
-                    repository(owner: $owner, name: $name) {
-                        name
-                        description
-                        object(expression: $expression) {
-                            ... on Tree {
-                                entries {
-                                    name
-                                    type
-                                    object {
-                                        ... on Blob {
-                                            text
+        logger.info("=== Starting GitHub repository fetch (recursive) ===")
+        logger.info(f"URL: {url}")
+
+        # 1. Parse the GitHub URL
+        repo_info = self._parse_github_url(url)
+
+        # 2. Fetch the entire tree from the branch/path
+        logger.info(f"Fetching entire tree for {repo_info}")
+        all_files = await self._fetch_tree(
+            owner=repo_info["owner"],
+            name=repo_info["name"],
+            branch=repo_info["branch"],
+            path=repo_info["path"],  # could be empty or a subdirectory
+        )
+
+        # 3. Return a dict with metadata + files
+        logger.info(f"Fetched {len(all_files)} total files recursively.")
+        return {
+            "url": url,
+            "owner": repo_info["owner"],
+            "name": repo_info["name"],
+            "description": "",  # can fetch separately if desired
+            "files": all_files,
+            "path": repo_info["path"],
+            "branch": repo_info["branch"],
+            "status": "processed",
+        }
+
+    async def _fetch_tree(
+        self,
+        owner: str,
+        name: str,
+        branch: str,
+        path: str,
+    ) -> List[Dict[str, str]]:
+        """
+        Recursively fetches all files (blobs) under the given path (tree).
+        """
+        files_collected: List[Dict[str, str]] = []
+
+        # Build an expression for GitHub's GraphQL
+        # "branch:path/to/directory" or just "branch:" for the repo root
+        expression = f"{branch}:{path}" if path else f"{branch}:"
+        logger.debug(f"_fetch_tree() expression = {expression}")
+
+        # 1. Query the current level (the "tree" for the given path)
+        query = gql("""
+            query($owner: String!, $name: String!, $expression: String!) {
+                repository(owner: $owner, name: $name) {
+                    object(expression: $expression) {
+                        ... on Tree {
+                            entries {
+                                name
+                                type
+                                object {
+                                    ... on Blob {
+                                        text
+                                    }
+                                    ... on Tree {
+                                        # We don't retrieve nested entries here
+                                        # because we'll do a separate query for each sub-tree
+                                        entries {
+                                            name
                                         }
                                     }
                                 }
@@ -134,55 +164,49 @@ class GitHubService:
                         }
                     }
                 }
-            """)
-    
-            # Execute the query
-            variables = {
-                "owner": repo_info["owner"],
-                "name": repo_info["name"],
-                "expression": expression
             }
-            
-            logger.info(f"Executing GraphQL query with variables: {variables}")
-            result = await self.client.execute_async(query, variable_values=variables)
-            
-            if not result or "repository" not in result:
-                raise ValueError(f"Repository {repo_info['owner']}/{repo_info['name']} not found")
-            
-            if not result["repository"]["object"]:
-                raise ValueError(f"Directory '{repo_info['path']}' not found in branch '{repo_info['branch']}'")
-    
-            # Process and format the response
-            files = self._process_files(result["repository"]["object"]["entries"])
-            logger.info(f"Processed {len(files)} files from repository")
-    
-            return {
-                "url": url,
-                "owner": repo_info["owner"],
-                "name": repo_info["name"],
-                "description": result["repository"].get("description", ""),
-                "files": files,
-                "path": repo_info["path"],
-                "branch": repo_info["branch"],
-                "status": "processed"
-            }
-    
-        except ValueError as e:
-            logger.error(f"Value error in fetch_repository: {str(e)}")
-            raise
-        except Exception as e:
-            logger.error(f"Error in fetch_repository: {str(e)}")
-            raise ValueError(f"Failed to fetch repository: {str(e)}")
+        """)
 
-    def _process_files(self, entries: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-        """
-        Process repository entries and extract file contents
-        """
-        files = []
+        variables = {
+            "owner": owner,
+            "name": name,
+            "expression": expression
+        }
+
+        try:
+            result = await self.client.execute_async(query, variable_values=variables)
+        except Exception as e:
+            msg = f"GitHub GraphQL query failed at path='{path}': {str(e)}"
+            logger.error(msg)
+            raise ValueError(msg)
+
+        # 2. Extract the top-level entries from the response
+        repository = result.get("repository")
+        if not repository or not repository.get("object"):
+            # This can happen if the path doesn't exist, or it's an empty directory
+            return files_collected  # Return empty
+
+        entries = repository["object"].get("entries", [])
+
+        # 3. Loop over entries. If it's a blob, we store it. If it's a tree, recurse.
         for entry in entries:
-            if entry["type"] == "blob" and entry["object"] and "text" in entry["object"]:
-                files.append({
-                    "name": entry["name"],
-                    "content": entry["object"]["text"]
-                })
-        return files
+            entry_type = entry["type"]
+            entry_name = entry["name"]
+
+            if entry_type == "blob":
+                # It's a file. Save its text
+                blob = entry["object"]
+                if blob and "text" in blob:
+                    files_collected.append({
+                        "name": f"{path}/{entry_name}".lstrip("/"),  # Full relative path
+                        "content": blob["text"],
+                    })
+
+            elif entry_type == "tree":
+                # It's a subdirectory. Recurse into it.
+                sub_path = f"{path}/{entry_name}".strip("/")
+                logger.debug(f"Recursing into subdirectory: {sub_path}")
+                sub_files = await self._fetch_tree(owner, name, branch, sub_path)
+                files_collected.extend(sub_files)
+
+        return files_collected

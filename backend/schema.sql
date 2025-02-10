@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS repositories (
     path TEXT NOT NULL DEFAULT '',
     processed_at TIMESTAMP,
     vectorized BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    error_message TEXT
 );
 
 -- Create index on status for faster queries

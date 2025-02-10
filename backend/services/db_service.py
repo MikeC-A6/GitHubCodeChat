@@ -250,25 +250,71 @@ class DatabaseService:
                 """
                 
                 row = await conn.fetchrow(query, *params)
+                if not row:
+                    raise DatabaseError(f"Repository {id} not found")
                 
-                return {
-                    "id": row["id"],
-                    "url": row["url"],
-                    "name": row["name"],
-                    "owner": row["owner"],
-                    "description": row["description"],
-                    "files": json.loads(row["files"]),
-                    "status": row["status"],
-                    "branch": row["branch"],
-                    "path": row["path"],
-                    "vectorized": row["vectorized"],
-                    "processed_at": row["processed_at"],
-                    "created_at": row["created_at"]
-                }
-
+                return dict(row)
+                
             except Exception as e:
-                logger.error(f"Failed to update repository status: {str(e)}")
                 raise DatabaseError(f"Failed to update repository status: {str(e)}")
+
+    async def update_embedding_status(
+        self,
+        repo_id: int,
+        status: str,
+        error_message: str = None
+    ) -> Dict[str, Any]:
+        """
+        Update repository embedding status
+        
+        Args:
+            repo_id: Repository ID
+            status: New status (pending, processing, completed, failed)
+            error_message: Optional error message if status is 'failed'
+        """
+        pool = await self.get_pool()
+        async with pool.acquire() as conn:
+            try:
+                update_fields = ["status = $2"]
+                params = [repo_id, status]
+                
+                # Set processed_at timestamp based on status
+                if status == "processing":
+                    update_fields.append("processed_at = NULL")
+                elif status in ["completed", "failed"]:
+                    update_fields.append("processed_at = CURRENT_TIMESTAMP")
+                
+                # Add error message if provided
+                if error_message is not None:
+                    update_fields.append("error_message = $3")
+                    params.append(error_message)
+                else:
+                    update_fields.append("error_message = NULL")
+                
+                # Update vectorized flag based on status
+                if status == "completed":
+                    update_fields.append("vectorized = true")
+                elif status == "failed":
+                    update_fields.append("vectorized = false")
+                
+                query = f"""
+                    UPDATE repositories 
+                    SET {', '.join(update_fields)}
+                    WHERE id = $1
+                    RETURNING 
+                        id, url, name, owner, description,
+                        files, status, branch, path, vectorized,
+                        processed_at, created_at, error_message
+                """
+                
+                row = await conn.fetchrow(query, *params)
+                if not row:
+                    raise DatabaseError(f"Repository {repo_id} not found")
+                
+                return dict(row)
+                
+            except Exception as e:
+                raise DatabaseError(f"Failed to update embedding status: {str(e)}")
 
     async def close(self):
         if self._pool:
