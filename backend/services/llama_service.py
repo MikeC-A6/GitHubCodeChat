@@ -19,9 +19,18 @@ class LlamaService:
             model_name="text-embedding-3-large"
         )
 
-        # Initialize pgvector store
+        # Get database connection string
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            raise ValueError("DATABASE_URL environment variable is required")
+
+        # Convert regular connection string to async format
+        async_db_url = db_url.replace('postgres://', 'postgresql+asyncpg://')
+
+        # Initialize pgvector store with required parameters
         self.vector_store = PGVectorStore(
-            connection_string=os.getenv("DATABASE_URL"),
+            async_connection_string=async_db_url,
+            schema_name="public",  # Using default PostgreSQL schema
             table_name="embeddings",
             embed_dim=3072  # dimension for text-embedding-3-large
         )
@@ -43,7 +52,7 @@ class LlamaService:
         """
         try:
             # Create index from vector store
-            index = VectorStoreIndex.from_vector_store(
+            index = await VectorStoreIndex.from_vector_store(
                 vector_store=self.vector_store,
                 service_context=self.service_context
             )
