@@ -15,4 +15,5 @@ dependencies = [
     "llama-index-core>=0.12.16.post1",
     "llama-index-vector-stores-postgres>=0.4.2",
     "llama-index-llms-gemini>=0.4.10",
+    "llama-index-vector-stores-pinecone>=0.4.4",
 ]
