@@ -1,13 +1,14 @@
-// Function to get the API base URL based on the environment
+// client/src/config.ts
+
 export function getApiBaseUrl(): string {
   const currentUrl = window.location.origin;
   
-  // Check if we're in Replit
-  if (currentUrl.includes('.repl.co') || currentUrl.includes('.replit.dev')) {
-    // Add /api prefix for the Express proxy
+  // On Replit, use the domain plus /api (proxied by Express).
+  if (currentUrl.includes(".repl.co") || currentUrl.includes(".replit.dev")) {
     return `${currentUrl}/api`;
   }
   
-  // Local development
-  return 'http://localhost:8000';
-} 
+  // For local dev, point to Express on port 5000,
+  // which in turn proxies to FastAPI on 8000.
+  return "http://localhost:5000/api";
+}
