@@ -14,11 +14,15 @@ class VectorStoreService:
         Using text-embedding-3-large which has 3072 dimensions
         """
         try:
-            self.pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
+            pinecone_api_key = os.environ.get("PINECONE_API_KEY")
+            if not pinecone_api_key:
+                raise ValueError("PINECONE_API_KEY not found in environment variables")
+
+            self.pc = Pinecone(api_key=pinecone_api_key)
             self.index_name = "codebases"
             self.dimension = 3072  # text-embedding-3-large dimensions
 
-            # Get or create index
+            # Get or create index using ServerlessSpec
             try:
                 self.index = self.pc.Index(self.index_name)
             except Exception:
@@ -44,7 +48,7 @@ class VectorStoreService:
     ) -> None:
         """
         Upload vectors to Pinecone
-        
+
         Args:
             repository_id: ID of the repository in PostgreSQL
             vectors: List of vectors from the embeddings service
@@ -94,7 +98,7 @@ class VectorStoreService:
     ) -> List[Dict[str, Any]]:
         """
         Query similar vectors
-        
+
         Args:
             query_embedding: The query vector
             repository_id: Optional repository ID to filter results
@@ -116,8 +120,8 @@ class VectorStoreService:
                 "score": match.score,
                 "repository_id": int(match.metadata["repository_id"]),
                 "file_name": match.metadata["file_name"],
-                "content": match.metadata["content"]
+                "content": match.metadata["chunk_content"]
             } for match in response.matches]
 
         except Exception as e:
-            raise VectorStoreError(f"Failed to query vectors: {str(e)}") 
+            raise VectorStoreError(f"Failed to query vectors: {str(e)}")

@@ -1,35 +1,22 @@
 # Standard library imports
 import os
 from typing import List, Dict, Any
-from pathlib import Path
 import logging
 
-# LlamaIndex core imports
+# LlamaIndex imports
 from llama_index.core import (
     Settings,
     VectorStoreIndex,
-    SimpleDirectoryReader,
-    ServiceContext
+    SimpleNodeParser
 )
-
-# LlamaIndex components
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 
 # Custom exceptions
 class LlamaServiceError(Exception):
     """Base exception for LlamaService"""
-    pass
-
-class DocumentLoadError(LlamaServiceError):
-    """Raised when there's an error loading documents"""
-    pass
-
-class VectorStoreError(LlamaServiceError):
-    """Raised when there's an error with vector store operations"""
     pass
 
 class ChatError(LlamaServiceError):
@@ -86,12 +73,14 @@ class LlamaService:
 
             self.embed_model = OpenAIEmbedding(
                 api_key=openai_api_key,
-                model_name="text-embedding-3-small"
+                model_name="text-embedding-3-small",
+                dimensions=3072  # Explicitly set dimensions
             )
 
-            # Set up LlamaIndex
+            # Configure global settings
             Settings.llm = self.llm
             Settings.embed_model = self.embed_model
+            Settings.node_parser = SimpleNodeParser.from_defaults()
 
             # Initialize vector store with new Pinecone instance
             self.vector_store = PineconeVectorStore(
@@ -117,13 +106,9 @@ class LlamaService:
             # Create metadata filter for the specified repositories
             metadata_filters = {"repository_id": {"$in": [str(repo_id) for repo_id in repository_ids]}}
 
-            # Create vector store index with the filter
+            # Create vector store index with settings already configured globally
             index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_store,
-                service_context=ServiceContext.from_defaults(
-                    llm=self.llm,
-                    embed_model=self.embed_model
-                )
+                vector_store=self.vector_store
             )
 
             # Create chat engine
