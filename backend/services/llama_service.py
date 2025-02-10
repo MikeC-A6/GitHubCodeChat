@@ -1,7 +1,7 @@
-from llama_index import VectorStoreIndex, ServiceContext
-from llama_index.vector_stores import PGVectorStore
-from llama_index.llms import Gemini
-from llama_index.embeddings import OpenAIEmbedding
+from llama_index.core import VectorStoreIndex, ServiceContext
+from llama_index.vector_stores.postgres import PGVectorStore
+from llama_index.llms.gemini import Gemini
+from llama_index.embeddings.openai import OpenAIEmbedding
 import os
 from typing import List, Dict, Any
 

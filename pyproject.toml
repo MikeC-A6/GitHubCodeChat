@@ -7,8 +7,12 @@ dependencies = [
     "fastapi>=0.115.8",
     "google-generativeai>=0.8.4",
     "gql[all]>=3.5.0",
+    "llama-index-embeddings-openai>=0.3.1",
     "llama-index>=0.12.16",
     "openai>=1.61.1",
     "python-dotenv>=1.0.1",
     "uvicorn>=0.34.0",
+    "llama-index-core>=0.12.16.post1",
+    "llama-index-vector-stores-postgres>=0.4.2",
+    "llama-index-llms-gemini>=0.4.10",
 ]
