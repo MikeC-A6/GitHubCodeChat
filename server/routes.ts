@@ -3,27 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertRepositorySchema, insertMessageSchema } from "@shared/schema";
 import { log } from "./vite";
-import { createProxyMiddleware } from 'http-proxy-middleware';
 
 export function registerRoutes(app: Express): Server {
-  // Proxy all GitHub-related requests to FastAPI backend
-  app.use('/api/github', createProxyMiddleware({
-    target: 'http://localhost:8000',
-    changeOrigin: true,
-    pathRewrite: {
-      '^/api/github': '/github'  // Rewrite /api/github to /github for FastAPI routes
-    },
-    proxyTimeout: 60000,  // 60 seconds timeout
-    timeout: 60000,       // 60 seconds timeout
-    onError: (err: Error, req: any, res: any) => {
-      log(`Proxy error: ${err.message}`);
-      res.status(504).json({
-        message: "Failed to connect to GitHub service",
-        details: err.message
-      });
-    }
-  }));
-
   // Repository endpoints
   app.get("/api/repositories", async (_req, res) => {
     try {

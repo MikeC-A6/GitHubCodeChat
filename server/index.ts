@@ -70,6 +70,32 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // ------------------------------------------
+// Proxy Configuration for FastAPI
+// ------------------------------------------
+app.use('/api', createProxyMiddleware({
+  target: 'http://0.0.0.0:8000',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api': '',  // Remove /api prefix when forwarding to FastAPI
+  },
+  onProxyReq: (proxyReq: ClientRequest) => {
+    log(`Proxying request to: ${proxyReq.path}`, "fastapi");
+  },
+  onProxyRes: (proxyRes: IncomingMessage) => {
+    log(`Proxy response status: ${proxyRes.statusCode}`, "fastapi");
+  },
+  onError: (err: Error, req: Request, res: Response) => {
+    log(`Proxy error: ${err.message}`, "fastapi");
+    res.status(504).json({
+      message: "Failed to connect to backend service",
+      details: err.message
+    });
+  },
+  proxyTimeout: 60000,
+  timeout: 60000,
+} as Options));
+
+// ------------------------------------------
 // Register Routes (which includes proxy configuration)
 // ------------------------------------------
 const server = registerRoutes(app);
