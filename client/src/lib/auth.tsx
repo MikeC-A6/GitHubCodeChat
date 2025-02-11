@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { User, signInWithPopup, signOut } from "firebase/auth";
+import { User, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       if (!result.user.email?.endsWith('@agile6.com')) {
-        await auth.signOut();
+        await firebaseSignOut(auth);
         toast({
           title: "Authentication Error",
           description: "Only @agile6.com email addresses are allowed.",
@@ -83,15 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const handleSignOut = async () => {
-    // In development, just clear the mock user
-    if (import.meta.env.DEV) {
-      setUser(null);
-      setLocation("/login");
-      return;
-    }
-
     try {
-      await signOut(auth);
+      await firebaseSignOut(auth);
       setLocation("/login");
       toast({
         title: "Signed out",
