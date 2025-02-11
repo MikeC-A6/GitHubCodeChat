@@ -53,6 +53,7 @@ origins = [
     REPLIT_URL,
     "https://*.replit.dev",
     "https://*.repl.co",
+    "https://*.replit.app",  # Add support for production domain
     "http://localhost:3000",
     "http://localhost:5000",
 ]
