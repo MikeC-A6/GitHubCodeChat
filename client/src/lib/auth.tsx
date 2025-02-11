@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "../hooks/use-toast";
 import { useLocation } from "wouter";
 
 interface AuthContextType {
@@ -31,19 +31,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setUser(user);
-      setLoading(false);
-      // Redirect to home page if user is authenticated and we're on the login page
-      if (user && window.location.pathname === "/login") {
-        setLocation("/");
-      } else if (!user && window.location.pathname !== "/login") {
-        setLocation("/login");
-      }
-    });
+    try {
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        setUser(user);
+        setLoading(false);
+        // Redirect to home page if user is authenticated and we're on the login page
+        if (user && window.location.pathname === "/login") {
+          setLocation("/");
+        } else if (!user && window.location.pathname !== "/login") {
+          setLocation("/login");
+        }
+      }, (error) => {
+        console.error('Auth state change error:', error);
+        setLoading(false);
+        toast({
+          title: "Authentication Error",
+          description: "There was an error with the authentication service. Please try again later.",
+          variant: "destructive",
+        });
+      });
 
-    return () => unsubscribe();
-  }, [setLocation]);
+      return () => unsubscribe();
+    } catch (error) {
+      console.error('Auth initialization error:', error);
+      setLoading(false);
+      toast({
+        title: "Authentication Error",
+        description: "Failed to initialize authentication service. Please check your configuration.",
+        variant: "destructive",
+      });
+    }
+  }, [setLocation, toast]);
 
   const handleSignIn = async () => {
     // In development, skip actual authentication
@@ -72,11 +90,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Welcome!",
         description: "Successfully signed in.",
       });
-      setLocation("/"); // Redirect after successful login
+      setLocation("/");
     } catch (error: any) {
+      console.error('Sign in error:', error);
+      let errorMessage = "An error occurred during sign in. Please try again.";
+      if (error.code === 'auth/configuration-not-found') {
+        errorMessage = "Firebase configuration error. Please check your setup.";
+      } else if (error.code === 'auth/popup-blocked') {
+        errorMessage = "Pop-up was blocked by your browser. Please allow pop-ups for this site.";
+      }
       toast({
         title: "Authentication Error",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -91,9 +116,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: "Successfully signed out.",
       });
     } catch (error: any) {
+      console.error('Sign out error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: "Failed to sign out. Please try again.",
         variant: "destructive",
       });
     }
