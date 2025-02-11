@@ -26,34 +26,57 @@ function validateFirebaseConfig() {
       'Please check your environment variables.'
     );
   }
-}
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.appspot.com`,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
+  // Log config presence without exposing values
+  console.log('Firebase config validation:', {
+    apiKey: !!import.meta.env.VITE_FIREBASE_API_KEY,
+    projectId: !!import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    appId: !!import.meta.env.VITE_FIREBASE_APP_ID
+  });
+}
 
 let auth;
 let googleProvider;
 
 try {
-  if (!import.meta.env.DEV) {
+  // Skip Firebase initialization in development
+  if (import.meta.env.DEV) {
+    console.log('Development mode: Skipping Firebase initialization');
+    auth = null;
+    googleProvider = null;
+  } else {
+    // Validate config before creating firebaseConfig object
     validateFirebaseConfig();
-  }
-  const app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  googleProvider = new GoogleAuthProvider();
 
-  // Restrict to @agile6.com domain
-  googleProvider.setCustomParameters({
-    hd: 'agile6.com'
-  });
-} catch (error) {
+    const firebaseConfig = {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.appspot.com`,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    };
+
+    console.log('Initializing Firebase with config structure:', {
+      hasApiKey: !!firebaseConfig.apiKey,
+      hasAuthDomain: !!firebaseConfig.authDomain,
+      hasProjectId: !!firebaseConfig.projectId,
+      hasStorageBucket: !!firebaseConfig.storageBucket,
+      hasAppId: !!firebaseConfig.appId
+    });
+
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    googleProvider = new GoogleAuthProvider();
+
+    // Restrict to @agile6.com domain
+    googleProvider.setCustomParameters({
+      hd: 'agile6.com'
+    });
+
+    console.log('Firebase initialized successfully');
+  }
+} catch (error: any) {
   console.error('Firebase initialization error:', error);
-  // Re-throw the error with a more descriptive message
   throw new Error(
     `Failed to initialize Firebase: ${error.message}. ` +
     'Please check your Firebase configuration and environment variables.'

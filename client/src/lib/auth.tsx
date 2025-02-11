@@ -22,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // In development, set a mock user
     if (import.meta.env.DEV) {
+      console.log('Development mode: Setting mock user');
       setUser({
         email: 'dev@agile6.com',
         emailVerified: true,
@@ -32,8 +33,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Initialize the auth listener
+      console.log('Setting up auth state listener');
+      if (!auth) {
+        throw new Error('Firebase auth is not initialized');
+      }
+
       const unsubscribe = auth.onAuthStateChanged((user) => {
+        console.log('Auth state changed:', { isAuthenticated: !!user });
         setUser(user);
         setLoading(false);
 
@@ -59,8 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       let errorMessage = "Failed to initialize authentication service.";
 
-      // Check for specific Firebase configuration errors
-      if (error.message?.includes('Firebase configuration')) {
+      if (error.message?.includes('Firebase configuration') || error.message?.includes('Firebase auth is not initialized')) {
         errorMessage = error.message;
       }
 
@@ -74,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleSignIn = async () => {
     if (import.meta.env.DEV) {
+      console.log('Development mode: Setting mock user for sign in');
       setUser({
         email: 'dev@agile6.com',
         emailVerified: true,
@@ -84,6 +90,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      if (!auth || !googleProvider) {
+        throw new Error('Firebase auth is not initialized');
+      }
+
       const result = await signInWithPopup(auth, googleProvider);
       if (!result.user.email?.endsWith('@agile6.com')) {
         await firebaseSignOut(auth);
@@ -103,12 +113,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Sign in error:', error);
       let errorMessage = "An error occurred during sign in.";
 
-      // Handle specific Firebase errors
       if (error.code === 'auth/configuration-not-found') {
         errorMessage = "Firebase configuration error. Please check your setup.";
       } else if (error.code === 'auth/popup-blocked') {
         errorMessage = "Pop-up was blocked by your browser. Please allow pop-ups for this site.";
-      } else if (error.message?.includes('Firebase configuration')) {
+      } else if (error.message?.includes('Firebase configuration') || error.message?.includes('Firebase auth is not initialized')) {
         errorMessage = error.message;
       }
 
@@ -122,12 +131,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleSignOut = async () => {
     if (import.meta.env.DEV) {
+      console.log('Development mode: Clearing mock user');
       setUser(null);
       setLocation("/login");
       return;
     }
 
     try {
+      if (!auth) {
+        throw new Error('Firebase auth is not initialized');
+      }
+
       await firebaseSignOut(auth);
       setLocation("/login");
       toast({
