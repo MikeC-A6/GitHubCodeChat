@@ -16,6 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Initialize FastAPI with timeout configuration
 app = FastAPI()
 
 # Initialize services
@@ -25,7 +26,7 @@ db_service = DatabaseService()
 async def startup_event():
     """Initialize services on startup"""
     logger.info("FastAPI server starting up...")
-    
+
     # Initialize database
     try:
         logger.info("Initializing database...")
@@ -33,27 +34,24 @@ async def startup_event():
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {str(e)}")
-        # Don't raise the error - let the app start even if DB init fails
-        # The error will be handled when making DB calls
 
     # Log registered routes
     logger.info("Routes registered:")
     for route in app.routes:
         logger.info(f"  {route.methods} {route.path}")
 
-# Get the Replit URL from environment or construct it
+# Configure CORS for production and development
 REPLIT_URL = os.environ.get('REPLIT_URL', '')
 if not REPLIT_URL and 'REPL_ID' in os.environ:
     REPL_OWNER = os.environ.get('REPL_OWNER', '')
     REPL_SLUG = os.environ.get('REPL_SLUG', '')
     REPLIT_URL = f"https://{REPL_SLUG}.{REPL_OWNER}.repl.co"
 
-# Configure CORS for Replit environment
 origins = [
     REPLIT_URL,
     "https://*.replit.dev",
     "https://*.repl.co",
-    "https://*.replit.app",  # Add support for production domain
+    "https://*.replit.app",
     "http://localhost:3000",
     "http://localhost:5000",
 ]
@@ -67,22 +65,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    logger.error(f"Validation error: {str(exc)}")
-    return JSONResponse(
-        status_code=422,
-        content={"detail": str(exc)},
-    )
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request, exc):
-    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc)},
-    )
 
 @app.get("/health")
 async def health_check():
@@ -101,5 +83,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port,
         log_level="info",
+        timeout_keep_alive=75,
         access_log=True
     )

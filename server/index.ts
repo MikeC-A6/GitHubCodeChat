@@ -56,7 +56,7 @@ pythonProcess.on("close", (code) => {
 });
 
 // ------------------------------------------
-// Request Logging Middleware (BEFORE proxy)
+// Request Logging Middleware
 // ------------------------------------------
 app.use((req: Request, res: Response, next: NextFunction) => {
   log(`Incoming request: ${req.method} ${req.url}`, "express");
@@ -64,40 +64,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // ------------------------------------------
-// Proxy Middleware for FastAPI (minimal configuration)
-// ------------------------------------------
-app.use(
-  "/api",
-  createProxyMiddleware({
-    target: "http://localhost:8000",
-    changeOrigin: true,
-    pathRewrite: {
-      "^/api": "", // remove '/api' prefix
-    },
-    onProxyReq: (proxyReq: ClientRequest, req: express.Request, res: express.Response) => {
-      log(`Proxying ${req.method} ${req.url}`, "fastapi");
-    },
-    onProxyRes: (proxyRes: IncomingMessage, req: express.Request, res: express.Response) => {
-      log(`Proxy response: ${proxyRes.statusCode} for ${req.method} ${req.url}`, "fastapi");
-    },
-    onError: (err: Error, req: express.Request, res: express.Response) => {
-      log(`Proxy error: ${err.message}`, "fastapi");
-      res.status(500).json({ 
-        error: "Failed to connect to Python backend", 
-        details: err.message 
-      });
-    },
-  } as Options)
-);
-
-// ------------------------------------------
-// Body Parsing Middleware (AFTER proxy)
+// Body Parsing Middleware
 // ------------------------------------------
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // ------------------------------------------
-// Register Other Routes (if any)
+// Register Routes (which includes proxy configuration)
 // ------------------------------------------
 const server = registerRoutes(app);
 

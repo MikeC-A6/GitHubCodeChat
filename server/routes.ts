@@ -13,7 +13,9 @@ export function registerRoutes(app: Express): Server {
     pathRewrite: {
       '^/api/github': '/github'  // Rewrite /api/github to /github for FastAPI routes
     },
-    onError: (err, req, res) => {
+    proxyTimeout: 60000,  // 60 seconds timeout
+    timeout: 60000,       // 60 seconds timeout
+    onError: (err: Error, req: any, res: any) => {
       log(`Proxy error: ${err.message}`);
       res.status(504).json({
         message: "Failed to connect to GitHub service",
