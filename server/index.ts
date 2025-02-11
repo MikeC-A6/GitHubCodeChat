@@ -72,8 +72,12 @@ app.use(express.urlencoded({ extended: false }));
 // ------------------------------------------
 // Proxy Configuration for FastAPI
 // ------------------------------------------
+const FASTAPI_URL = process.env.NODE_ENV === 'production' 
+  ? 'http://0.0.0.0:8000'  // Production
+  : 'http://0.0.0.0:8000'; // Development
+
 app.use('/api', createProxyMiddleware({
-  target: 'http://0.0.0.0:8000',
+  target: FASTAPI_URL,
   changeOrigin: true,
   pathRewrite: {
     '^/api': '',  // Remove /api prefix when forwarding to FastAPI
@@ -91,8 +95,8 @@ app.use('/api', createProxyMiddleware({
       details: err.message
     });
   },
-  proxyTimeout: 60000,
-  timeout: 60000,
+  proxyTimeout: 120000, // 2 minutes
+  timeout: 120000,      // 2 minutes
 } as Options));
 
 // ------------------------------------------

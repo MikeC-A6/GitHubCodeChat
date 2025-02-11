@@ -54,6 +54,8 @@ origins = [
     "https://*.replit.app",
     "http://localhost:3000",
     "http://localhost:5000",
+    "http://0.0.0.0:5000",
+    "http://127.0.0.1:5000",
 ]
 
 logger.info(f"Configured CORS origins: {origins}")
@@ -83,6 +85,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port,
         log_level="info",
-        timeout_keep_alive=75,
+        timeout_keep_alive=120,  # 2 minutes timeout
         access_log=True
     )
