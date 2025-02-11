@@ -1,0 +1,80 @@
+Making API request: 
+{method: 'GET', url: 'https://a6codechat.replit.app/api/github/repositories', data: undefined, headers: {…}}
+index-qcI2yfLw.js:48 
+ GET https://a6codechat.replit.app/api/github/repositories 504 (Gateway Timeout)
+index-qcI2yfLw.js:48 Response received: 
+{status: 504, statusText: '', headers: {…}, url: 'https://a6codechat.replit.app/api/github/repositories'}
+index-qcI2yfLw.js:120 Fetching repositories...
+index-qcI2yfLw.js:48 Making API request: 
+{method: 'GET', url: 'https://a6codechat.replit.app/api/github/repositories', data: undefined, headers: {…}}
+index-qcI2yfLw.js:48 
+ GET https://a6codechat.replit.app/api/github/repositories 504 (Gateway Timeout)
+index-qcI2yfLw.js:48 Response received: 
+{status: 504, statusText: '', headers: {…}, url: 'https://a6codechat.replit.app/api/github/repositories'}
+index-qcI2yfLw.js:120 Repository response: 504
+index-qcI2yfLw.js:120 Error fetching repositories: Error occurred while trying to proxy: a6codechat.replit.app/github/repositories
+index-qcI2yfLw.js:120 Error fetching repositories: Error: Failed to fetch repositories
+    at queryFn (index-qcI2yfLw.js:120:12519)
+index-qcI2yfLw.js:48 Making API request: 
+{method: 'GET', url: 'https://a6codechat.replit.app/api/github/repositories', data: undefined, headers: {…}}
+index-qcI2yfLw.js:48 
+ GET https://a6codechat.replit.app/api/github/repositories 504 (Gateway Timeout)
+index-qcI2yfLw.js:48 Response received: 
+{status: 504, statusText: '', headers: {…}, url: 'https://a6codechat.replit.app/api/github/repositories'}
+headers
+: 
+{alt-svc: 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000', content-length: '79', content-type: 'text/html', date: 'Tue, 11 Feb 2025 22:43:13 GMT', server: 'Google Frontend', …}
+status
+: 
+504
+statusText
+: 
+""
+url
+: 
+"https://a6codechat.replit.app/api/github/repositories"
+[[Prototype]]
+: 
+Object
+constructor
+: 
+ƒ Object()
+hasOwnProperty
+: 
+ƒ hasOwnProperty()
+isPrototypeOf
+: 
+ƒ isPrototypeOf()
+propertyIsEnumerable
+: 
+ƒ propertyIsEnumerable()
+toLocaleString
+: 
+ƒ toLocaleString()
+toString
+: 
+ƒ toString()
+valueOf
+: 
+ƒ valueOf()
+__defineGetter__
+: 
+ƒ __defineGetter__()
+__defineSetter__
+: 
+ƒ __defineSetter__()
+__lookupGetter__
+: 
+ƒ __lookupGetter__()
+__lookupSetter__
+: 
+ƒ __lookupSetter__()
+__proto__
+: 
+(...)
+get __proto__
+: 
+ƒ __proto__()
+set __proto__
+: 
+ƒ __proto__()
