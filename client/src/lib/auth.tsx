@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
-import { useToast } from "../hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
 interface AuthContextType {
@@ -32,10 +32,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Initialize the auth listener
       const unsubscribe = auth.onAuthStateChanged((user) => {
         setUser(user);
         setLoading(false);
-        // Redirect to home page if user is authenticated and we're on the login page
+
+        // Handle navigation based on auth state
         if (user && window.location.pathname === "/login") {
           setLocation("/");
         } else if (!user && window.location.pathname !== "/login") {
@@ -46,25 +48,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         toast({
           title: "Authentication Error",
-          description: "There was an error with the authentication service. Please try again later.",
+          description: "There was an error with the authentication service. Please check your Firebase configuration.",
           variant: "destructive",
         });
       });
 
       return () => unsubscribe();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Auth initialization error:', error);
       setLoading(false);
+      let errorMessage = "Failed to initialize authentication service.";
+
+      // Check for specific Firebase configuration errors
+      if (error.message?.includes('Firebase configuration')) {
+        errorMessage = error.message;
+      }
+
       toast({
         title: "Authentication Error",
-        description: "Failed to initialize authentication service. Please check your configuration.",
+        description: errorMessage,
         variant: "destructive",
       });
     }
   }, [setLocation, toast]);
 
   const handleSignIn = async () => {
-    // In development, skip actual authentication
     if (import.meta.env.DEV) {
       setUser({
         email: 'dev@agile6.com',
@@ -93,12 +101,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLocation("/");
     } catch (error: any) {
       console.error('Sign in error:', error);
-      let errorMessage = "An error occurred during sign in. Please try again.";
+      let errorMessage = "An error occurred during sign in.";
+
+      // Handle specific Firebase errors
       if (error.code === 'auth/configuration-not-found') {
         errorMessage = "Firebase configuration error. Please check your setup.";
       } else if (error.code === 'auth/popup-blocked') {
         errorMessage = "Pop-up was blocked by your browser. Please allow pop-ups for this site.";
+      } else if (error.message?.includes('Firebase configuration')) {
+        errorMessage = error.message;
       }
+
       toast({
         title: "Authentication Error",
         description: errorMessage,
@@ -108,6 +121,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const handleSignOut = async () => {
+    if (import.meta.env.DEV) {
+      setUser(null);
+      setLocation("/login");
+      return;
+    }
+
     try {
       await firebaseSignOut(auth);
       setLocation("/login");
