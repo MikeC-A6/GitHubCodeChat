@@ -55,7 +55,7 @@ pythonProcess.on("close", (code) => {
 });
 
 // ------------------------------------------
-// Request Logging Middleware
+// Request Logging Middleware (BEFORE proxy)
 // ------------------------------------------
 app.use((req: Request, res: Response, next: NextFunction) => {
   log(`Incoming request: ${req.method} ${req.url}`, "express");
@@ -63,13 +63,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // ------------------------------------------
-// Body Parsing Middleware
-// ------------------------------------------
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-// ------------------------------------------
-// Proxy Configuration for FastAPI
+// Proxy Configuration for FastAPI (BEFORE body parsing)
 // ------------------------------------------
 const FASTAPI_URL = process.env.NODE_ENV === 'production'
   ? 'http://0.0.0.0:8000'  // Production
@@ -79,32 +73,36 @@ app.use('/api', createProxyMiddleware({
   target: FASTAPI_URL,
   changeOrigin: true,
   pathRewrite: {
-    '^/api': '',  // Remove /api prefix when forwarding to FastAPI
+    '^/api': ''  // Remove /api prefix when forwarding to FastAPI
   },
-  onProxyReq: (proxyReq: ClientRequest) => {
-    log(`Proxying ${proxyReq.method} request to: ${proxyReq.path}`, "fastapi");
+  onProxyReq(proxyReq: ClientRequest, req: Request) {
+    log(`Proxying ${req.method} ${req.url} to FastAPI`, "proxy");
   },
-  onProxyRes: (proxyRes: IncomingMessage) => {
-    log(`Proxy response status: ${proxyRes.statusCode}`, "fastapi");
-    // Log headers for debugging
-    log(`Response headers: ${JSON.stringify(proxyRes.headers)}`, "fastapi");
+  onProxyRes(proxyRes: IncomingMessage, req: Request) {
+    log(`Proxy response: ${proxyRes.statusCode} for ${req.method} ${req.url}`, "proxy");
   },
-  onError: (err: Error, req: Request, res: Response) => {
-    log(`Proxy error: ${err.message}`, "fastapi");
-    // Log the full error stack for debugging
-    log(`Full error: ${err.stack}`, "fastapi");
-    res.status(504).json({
-      message: "Failed to connect to backend service",
-      details: err.message,
-      path: req.url
-    });
+  onError(err: Error, req: Request, res: Response) {
+    log(`Proxy error: ${err.message}`, "proxy");
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: "Failed to connect to Python backend",
+        details: err.message,
+        path: req.url
+      });
+    }
   },
-  proxyTimeout: 300000, // 5 minutes - chat responses can take longer
-  timeout: 300000,      // 5 minutes
+  proxyTimeout: 120000,  // 2 minutes
+  timeout: 120000       // 2 minutes
 } as Options));
 
 // ------------------------------------------
-// Register Routes (which includes proxy configuration)
+// Body Parsing Middleware (AFTER proxy)
+// ------------------------------------------
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+// ------------------------------------------
+// Register Routes
 // ------------------------------------------
 const server = registerRoutes(app);
 

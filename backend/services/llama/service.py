@@ -1,9 +1,10 @@
 """Main LlamaIndex service implementation."""
 
 import logging
+import asyncio
 from typing import List, Dict, Optional
 
-from llama_index.core import VectorStoreIndex
+from llama_index.core import VectorStoreIndex, Settings
 from llama_index.core.llms import ChatMessage, MessageRole
 
 from .config.config import LlamaConfig
@@ -26,6 +27,10 @@ class LlamaService:
             # Initialize vector store
             pinecone_index = self.config.get_pinecone_index()
             self.vector_store_manager = VectorStoreManager(pinecone_index)
+
+            # Set global settings
+            Settings.llm = self.config.llm
+            Settings.embed_model = self.config.embed_model
 
             logger.info("LlamaService initialized successfully")
 
@@ -75,8 +80,16 @@ class LlamaService:
             vector_store = self.vector_store_manager.get_vector_store()
             logger.info("Retrieved vector store")
 
-            index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
-            logger.info("Created vector store index")
+            # Set a timeout for index creation
+            try:
+                async with asyncio.timeout(30):  # 30 second timeout
+                    index = VectorStoreIndex.from_vector_store(
+                        vector_store=vector_store,
+                        service_context=Settings
+                    )
+                    logger.info("Created vector store index")
+            except asyncio.TimeoutError:
+                raise ChatError("Timeout while creating vector store index")
 
             # Create chat engine with metadata filters and retrieval config
             retrieval_config = self.config.get_retrieval_config()
@@ -84,27 +97,37 @@ class LlamaService:
 
             chat_engine = index.as_chat_engine(
                 filters=metadata_filter,
+                service_context=Settings,
                 **retrieval_config
             )
             logger.info("Created chat engine")
 
             # Format chat history as ChatMessage objects
-            formatted_history = [
-                ChatMessage(
-                    role=self._convert_role(msg["role"]),
-                    content=msg["content"]
-                )
-                for msg in chat_history
-            ]
+            formatted_history = []
+            for msg in chat_history:
+                try:
+                    formatted_history.append(
+                        ChatMessage(
+                            role=self._convert_role(msg["role"]),
+                            content=str(msg["content"])  # Ensure content is string
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to format message {msg}: {e}")
+                    continue
+
             logger.info(f"Formatted chat history: {len(formatted_history)} messages")
 
-            # Get response
-            logger.info("Sending chat request to engine")
-            response = await chat_engine.achat(
-                message=message,
-                chat_history=formatted_history
-            )
-            logger.info("Received response from chat engine")
+            # Get response with timeout
+            try:
+                async with asyncio.timeout(60):  # 60 second timeout
+                    response = await chat_engine.achat(
+                        message=message,
+                        chat_history=formatted_history
+                    )
+                    logger.info("Received response from chat engine")
+            except asyncio.TimeoutError:
+                raise ChatError("Timeout while waiting for chat response")
 
             # Handle response
             if hasattr(response, 'response'):
