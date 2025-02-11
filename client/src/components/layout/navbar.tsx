@@ -12,24 +12,24 @@ export default function Navbar() {
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
             <Link href="/">
-              <span className="text-xl font-bold cursor-pointer">Repository Processor</span>
+              <span className="text-xl font-bold cursor-pointer">Repository Chat</span>
             </Link>
 
             <div className="flex gap-4">
-              <Link href="/chat">
+              <Link href="/">
                 <span className={cn(
                   "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer",
-                  location === "/chat" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                  location === "/" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                 )}>
                   <ChatBubbleIcon className="h-5 w-5" />
                   Chat
                 </span>
               </Link>
 
-              <Link href="/">
+              <Link href="/repository">
                 <span className={cn(
                   "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer",
-                  location === "/" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                  location === "/repository" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                 )}>
                   <GitHubLogoIcon className="h-5 w-5" />
                   Process Repository

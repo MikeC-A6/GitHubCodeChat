@@ -22,8 +22,8 @@ function AppContent() {
 function Router() {
   return (
     <Switch>
-      <Route path="/chat" component={Chat} />
-      <Route path="/" component={RepositoryProcessor} />
+      <Route path="/" component={Chat} />
+      <Route path="/repository" component={RepositoryProcessor} />
       <Route component={NotFound} />
     </Switch>
   );
