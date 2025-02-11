@@ -34,7 +34,7 @@ export default function Login() {
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md flex flex-col items-center mb-8">
         <img src={logo} alt="Agile Six Logo" className="h-12 mb-4" />
-        <h1 className="text-xl font-medium text-muted-foreground mb-2">GitHub Repository to Text Tool</h1>
+        <h1 className="text-xl font-medium text-muted-foreground mb-2">Agile Six Code Repo Context</h1>
       </div>
 
       <Card className="w-full max-w-md">
