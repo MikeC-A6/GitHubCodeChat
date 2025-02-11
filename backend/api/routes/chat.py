@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from backend.services.llama_service import LlamaService
+from backend.services.llama import LlamaService
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
