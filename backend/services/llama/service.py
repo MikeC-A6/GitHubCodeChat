@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class LlamaService:
     """Main service class for LlamaIndex operations."""
-    
+
     def __init__(self):
         """Initialize the LlamaIndex service."""
         try:
@@ -22,17 +22,17 @@ class LlamaService:
             self.config = LlamaConfig()
             self.config.initialize()
             self.config.ensure_index_exists()
-            
+
             # Initialize vector store
             pinecone_index = self.config.get_pinecone_index()
             self.vector_store_manager = VectorStoreManager(pinecone_index)
-            
+
             logger.info("LlamaService initialized successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize LlamaService: {str(e)}")
             raise
-    
+
     def configure_retrieval(
         self,
         similarity_top_k: Optional[int] = None,
@@ -45,7 +45,7 @@ class LlamaService:
             chat_mode=chat_mode,
             verbose=verbose
         )
-    
+
     def _convert_role(self, role: str) -> MessageRole:
         """Convert role string to MessageRole enum."""
         role_map = {
@@ -54,7 +54,7 @@ class LlamaService:
             "system": MessageRole.SYSTEM
         }
         return role_map.get(role.lower(), MessageRole.USER)
-    
+
     async def chat(
         self,
         repository_ids: List[int],
@@ -63,20 +63,31 @@ class LlamaService:
     ) -> str:
         """Process a chat message using LlamaIndex and Gemini."""
         try:
+            logger.info(f"Processing chat request for repositories: {repository_ids}")
+            logger.info(f"Message: {message}")
+            logger.info(f"Chat history length: {len(chat_history)}")
+
             # Create metadata filter for repository IDs
             metadata_filter = self.vector_store_manager.create_repository_filter(repository_ids)
-            
+            logger.info(f"Created metadata filter: {metadata_filter}")
+
             # Create vector store index
-            index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_store_manager.get_vector_store()
-            )
-            
+            vector_store = self.vector_store_manager.get_vector_store()
+            logger.info("Retrieved vector store")
+
+            index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
+            logger.info("Created vector store index")
+
             # Create chat engine with metadata filters and retrieval config
+            retrieval_config = self.config.get_retrieval_config()
+            logger.info(f"Using retrieval config: {retrieval_config}")
+
             chat_engine = index.as_chat_engine(
                 filters=metadata_filter,
-                **self.config.get_retrieval_config()
+                **retrieval_config
             )
-            
+            logger.info("Created chat engine")
+
             # Format chat history as ChatMessage objects
             formatted_history = [
                 ChatMessage(
@@ -85,23 +96,27 @@ class LlamaService:
                 )
                 for msg in chat_history
             ]
-            
+            logger.info(f"Formatted chat history: {len(formatted_history)} messages")
+
             # Get response
+            logger.info("Sending chat request to engine")
             response = await chat_engine.achat(
                 message=message,
                 chat_history=formatted_history
             )
-            
+            logger.info("Received response from chat engine")
+
             # Handle response
             if hasattr(response, 'response'):
-                return str(response.response)
+                result = str(response.response)
             elif hasattr(response, 'message'):
-                return str(response.message)
+                result = str(response.message)
             else:
-                return str(response)
-            
+                result = str(response)
+
+            logger.info(f"Final response length: {len(result)}")
+            return result
+
         except Exception as e:
             logger.error(f"Error in chat: {str(e)}", exc_info=True)
-            if hasattr(e, 'response'):
-                logger.error(f"Response error details: {e.response}")
-            raise ChatError(f"Failed to process chat message: {str(e)}") 
+            raise ChatError(f"Failed to process chat message: {str(e)}")

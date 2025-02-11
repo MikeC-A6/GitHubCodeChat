@@ -1,5 +1,4 @@
 // server/index.ts
-
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -72,7 +71,7 @@ app.use(express.urlencoded({ extended: false }));
 // ------------------------------------------
 // Proxy Configuration for FastAPI
 // ------------------------------------------
-const FASTAPI_URL = process.env.NODE_ENV === 'production' 
+const FASTAPI_URL = process.env.NODE_ENV === 'production'
   ? 'http://0.0.0.0:8000'  // Production
   : 'http://0.0.0.0:8000'; // Development
 
@@ -83,20 +82,25 @@ app.use('/api', createProxyMiddleware({
     '^/api': '',  // Remove /api prefix when forwarding to FastAPI
   },
   onProxyReq: (proxyReq: ClientRequest) => {
-    log(`Proxying request to: ${proxyReq.path}`, "fastapi");
+    log(`Proxying ${proxyReq.method} request to: ${proxyReq.path}`, "fastapi");
   },
   onProxyRes: (proxyRes: IncomingMessage) => {
     log(`Proxy response status: ${proxyRes.statusCode}`, "fastapi");
+    // Log headers for debugging
+    log(`Response headers: ${JSON.stringify(proxyRes.headers)}`, "fastapi");
   },
   onError: (err: Error, req: Request, res: Response) => {
     log(`Proxy error: ${err.message}`, "fastapi");
+    // Log the full error stack for debugging
+    log(`Full error: ${err.stack}`, "fastapi");
     res.status(504).json({
       message: "Failed to connect to backend service",
-      details: err.message
+      details: err.message,
+      path: req.url
     });
   },
-  proxyTimeout: 120000, // 2 minutes
-  timeout: 120000,      // 2 minutes
+  proxyTimeout: 300000, // 5 minutes - chat responses can take longer
+  timeout: 300000,      // 5 minutes
 } as Options));
 
 // ------------------------------------------
