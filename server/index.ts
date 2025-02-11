@@ -29,6 +29,8 @@ const pythonProcess = spawn("python3", [
   "--reload",
   "--log-level",
   "info",
+  "--timeout-keep-alive",
+  "120",  // Increase keep-alive timeout
 ], {
   cwd: process.cwd(),
   env: {
@@ -63,32 +65,40 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// ------------------------------------------
-// Proxy Middleware for FastAPI (minimal configuration)
-// ------------------------------------------
-app.use(
-  "/api",
-  createProxyMiddleware({
-    target: "http://localhost:8000",
-    changeOrigin: true,
-    pathRewrite: {
-      "^/api": "", // remove '/api' prefix
-    },
-    onProxyReq: (proxyReq: ClientRequest, req: express.Request, res: express.Response) => {
-      log(`Proxying ${req.method} ${req.url}`, "fastapi");
-    },
-    onProxyRes: (proxyRes: IncomingMessage, req: express.Request, res: express.Response) => {
-      log(`Proxy response: ${proxyRes.statusCode} for ${req.method} ${req.url}`, "fastapi");
-    },
-    onError: (err: Error, req: express.Request, res: express.Response) => {
-      log(`Proxy error: ${err.message}`, "fastapi");
-      res.status(500).json({ 
-        error: "Failed to connect to Python backend", 
-        details: err.message 
-      });
-    },
-  } as Options)
-);
+// Wait for FastAPI to initialize
+setTimeout(() => {
+  // ------------------------------------------
+  // Proxy Middleware for FastAPI (with improved configuration)
+  // ------------------------------------------
+  app.use(
+    "/api",
+    createProxyMiddleware({
+      target: "http://localhost:8000",
+      changeOrigin: true,
+      pathRewrite: {
+        "^/api": "", // remove '/api' prefix
+      },
+      // Increase timeouts
+      proxyTimeout: 120000,
+      timeout: 120000,
+      onProxyReq: (proxyReq: ClientRequest, req: express.Request, res: express.Response) => {
+        log(`Proxying ${req.method} ${req.url}`, "fastapi");
+        // Ensure connection is kept alive
+        proxyReq.setHeader('Connection', 'keep-alive');
+      },
+      onProxyRes: (proxyRes: IncomingMessage, req: express.Request, res: express.Response) => {
+        log(`Proxy response: ${proxyRes.statusCode} for ${req.method} ${req.url}`, "fastapi");
+      },
+      onError: (err: Error, req: express.Request, res: express.Response) => {
+        log(`Proxy error: ${err.message}`, "fastapi");
+        res.status(500).json({ 
+          error: "Failed to connect to Python backend", 
+          details: err.message 
+        });
+      },
+    } as Options)
+  );
+}, 5000); // Give FastAPI 5 seconds to initialize
 
 // ------------------------------------------
 // Body Parsing Middleware (AFTER proxy)

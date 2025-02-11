@@ -1,12 +1,12 @@
-from fastapi import FastAPI
+import logging
+import sys
+import os
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from backend.api.routes import github, chat
 from backend.services.db_service import DatabaseService
-import logging
-import sys
-import os
 
 # Configure logging
 logging.basicConfig(
@@ -25,7 +25,7 @@ db_service = DatabaseService()
 async def startup_event():
     """Initialize services on startup"""
     logger.info("FastAPI server starting up...")
-    
+
     # Initialize database
     try:
         logger.info("Initializing database...")
@@ -53,7 +53,7 @@ origins = [
     REPLIT_URL,
     "https://*.replit.dev",
     "https://*.repl.co",
-    "https://*.replit.app",  # Add support for production domain
+    "https://*.replit.app",  # Support for production domain
     "http://localhost:3000",
     "http://localhost:5000",
 ]
@@ -67,6 +67,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as exc:
+        logger.error(f"Request failed: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(exc)},
+        )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
@@ -101,5 +113,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port,
         log_level="info",
-        access_log=True
+        access_log=True,
+        timeout_keep_alive=120
     )
