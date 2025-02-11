@@ -49,35 +49,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (!user && window.location.pathname !== "/login") {
           setLocation("/login");
         }
-      }, (error) => {
-        console.error('Auth state change error:', error);
-        setLoading(false);
-        toast({
-          title: "Authentication Error",
-          description: "There was an error with the authentication service. Please check your Firebase configuration.",
-          variant: "destructive",
-        });
       });
 
       return () => unsubscribe();
     } catch (error: any) {
       console.error('Auth initialization error:', error);
       setLoading(false);
-      let errorMessage = "Failed to initialize authentication service.";
 
-      if (error.message?.includes('Firebase configuration') || error.message?.includes('Firebase auth is not initialized')) {
-        errorMessage = error.message;
-      }
+      const configErrorMessage = error.code === 'auth/configuration-not-found'
+        ? 'Firebase project is not configured for web authentication. Please ensure:\n' +
+          '1. Your domain is added to authorized domains in Firebase Console\n' +
+          '2. Web application is properly configured in the Firebase project\n' +
+          '3. OAuth consent screen is set up in the Google Cloud Console\n' +
+          '4. Firebase Hosting is linked to your app (shown in Firebase Console setup)'
+        : "Failed to initialize authentication service. Please check your Firebase configuration.";
 
       toast({
         title: "Authentication Error",
-        description: errorMessage,
+        description: configErrorMessage,
         variant: "destructive",
       });
     }
   }, [setLocation, toast]);
 
   const handleSignIn = async () => {
+    // In development, skip actual authentication
     if (import.meta.env.DEV) {
       console.log('Development mode: Setting mock user for sign in');
       setUser({
@@ -108,16 +104,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Welcome!",
         description: "Successfully signed in.",
       });
-      setLocation("/");
+      setLocation("/"); // Redirect after successful login
     } catch (error: any) {
       console.error('Sign in error:', error);
       let errorMessage = "An error occurred during sign in.";
 
       if (error.code === 'auth/configuration-not-found') {
-        errorMessage = "Firebase configuration error. Please check your setup.";
+        errorMessage = 'Firebase project requires configuration. Please ensure:\n' +
+          '1. Your domain is added to authorized domains in Firebase Console\n' +
+          '2. Web application is properly configured in the Firebase project\n' +
+          '3. OAuth consent screen is set up in the Google Cloud Console\n' +
+          '4. Firebase Hosting is linked to your app (shown in Firebase Console setup)';
       } else if (error.code === 'auth/popup-blocked') {
         errorMessage = "Pop-up was blocked by your browser. Please allow pop-ups for this site.";
-      } else if (error.message?.includes('Firebase configuration') || error.message?.includes('Firebase auth is not initialized')) {
+      } else if (error.message?.includes('Firebase project is not configured')) {
         errorMessage = error.message;
       }
 

@@ -53,6 +53,7 @@ try {
       authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
       projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
       storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.appspot.com`,
+      messagingSenderId: "376645885554",
       appId: import.meta.env.VITE_FIREBASE_APP_ID,
     };
 
@@ -61,7 +62,9 @@ try {
       hasAuthDomain: !!firebaseConfig.authDomain,
       hasProjectId: !!firebaseConfig.projectId,
       hasStorageBucket: !!firebaseConfig.storageBucket,
-      hasAppId: !!firebaseConfig.appId
+      hasMessagingSenderId: !!firebaseConfig.messagingSenderId,
+      hasAppId: !!firebaseConfig.appId,
+      authDomain: firebaseConfig.authDomain // Log the actual domain for verification
     });
 
     const app = initializeApp(firebaseConfig);
@@ -77,10 +80,15 @@ try {
   }
 } catch (error: any) {
   console.error('Firebase initialization error:', error);
-  throw new Error(
-    `Failed to initialize Firebase: ${error.message}. ` +
-    'Please check your Firebase configuration and environment variables.'
-  );
+  const errorMessage = error.code === 'auth/configuration-not-found'
+    ? 'Firebase project is not configured for web authentication. Please ensure:\n' +
+      '1. Your domain is added to authorized domains in Firebase Console\n' +
+      '2. Web application is properly configured in the Firebase project\n' +
+      '3. OAuth consent screen is set up in the Google Cloud Console\n' +
+      '4. Firebase Hosting is linked to your app (shown in Firebase Console setup)'
+    : `Failed to initialize Firebase: ${error.message}. Please check your Firebase configuration and environment variables.`;
+
+  throw new Error(errorMessage);
 }
 
 export { auth, googleProvider };
