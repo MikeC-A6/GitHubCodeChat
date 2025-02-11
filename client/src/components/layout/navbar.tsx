@@ -14,22 +14,12 @@ export default function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
-            <Link href="/">
+            <Link href="/chat">
               <span className="text-xl font-bold cursor-pointer">Repository Processor</span>
             </Link>
 
             {user && (
               <div className="flex gap-4">
-                <Link href="/">
-                  <span className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer",
-                    location === "/" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                  )}>
-                    <GitHubLogoIcon className="h-5 w-5" />
-                    Process Repository
-                  </span>
-                </Link>
-
                 <Link href="/chat">
                   <span className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer",
@@ -37,6 +27,16 @@ export default function Navbar() {
                   )}>
                     <ChatBubbleIcon className="h-5 w-5" />
                     Chat
+                  </span>
+                </Link>
+
+                <Link href="/">
+                  <span className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer",
+                    location === "/" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                  )}>
+                    <GitHubLogoIcon className="h-5 w-5" />
+                    Process Repository
                   </span>
                 </Link>
               </div>
