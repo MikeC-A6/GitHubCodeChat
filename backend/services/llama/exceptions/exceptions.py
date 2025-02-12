@@ -18,4 +18,21 @@ class ChatError(LlamaServiceError):
 
 class ConfigurationError(LlamaServiceError):
     """Raised when there's an error with service configuration"""
-    pass 
+    pass
+
+class RetryableError(Exception):
+    """Raised when an operation fails but can be retried."""
+    pass
+
+def is_retryable_error(error: Exception) -> bool:
+    """Check if an error is retryable."""
+    from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, TooManyRequests
+
+    retryable_exceptions = (
+        ResourceExhausted,  # 429 errors
+        ServiceUnavailable,  # 503 errors
+        TooManyRequests,    # Another form of 429
+        RetryableError
+    )
+    
+    return isinstance(error, retryable_exceptions) 

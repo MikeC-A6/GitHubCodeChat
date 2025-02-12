@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RetrievalConfig:
     """Configuration for document retrieval."""
-    similarity_top_k: int = 10
+    similarity_top_k: int = 20
     chat_mode: str = "condense_plus_context"
     verbose: bool = True
     

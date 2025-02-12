@@ -10,6 +10,7 @@ from llama_index.core.llms import ChatMessage, MessageRole
 from .config.config import LlamaConfig
 from .store.vector_store import VectorStoreManager
 from .exceptions.exceptions import ChatError
+from .utils.retry import async_retry
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class LlamaService:
         }
         return role_map.get(role.lower(), MessageRole.USER)
 
+    @async_retry(max_retries=3, initial_delay=1.0, max_delay=10.0)
     async def chat(
         self,
         repository_ids: List[int],
