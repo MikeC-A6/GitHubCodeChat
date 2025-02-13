@@ -124,11 +124,26 @@ class LlamaService:
             try:
                 async with asyncio.timeout(60):  # 60 second timeout
                     logger.info("Querying chat engine...")
+                    logger.info(f"Vector store metadata filter: {metadata_filter}")
+                    
+                    # Log vector store state
+                    store_info = self.vector_store_manager.get_vector_store()
+                    logger.info(f"Vector store config: {store_info._vector_store.pinecone_index.describe_index_stats()}")
+                    
                     response = await chat_engine.achat(
                         message=message,
                         chat_history=formatted_history
                     )
+                    
+                    # Log retrieval details
                     logger.info(f"Raw response from chat engine: {response}")
+                    if hasattr(response, '_context'):
+                        logger.info(f"Context nodes: {response._context}")
+                    if hasattr(response, 'source_nodes'):
+                        for idx, node in enumerate(response.source_nodes):
+                            logger.info(f"Source node {idx}: {node.metadata}")
+                            logger.info(f"Source text {idx}: {node.text[:200]}...")
+                    
             except asyncio.TimeoutError:
                 raise ChatError("Timeout while waiting for chat response")
 

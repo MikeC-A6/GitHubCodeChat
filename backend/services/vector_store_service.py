@@ -79,10 +79,18 @@ class VectorStoreService:
             total_batches = (len(pinecone_vectors) + batch_size - 1) // batch_size
             vectors_upserted = 0
             
+            # Log sample vector for debugging
+            if pinecone_vectors:
+                sample_vec = pinecone_vectors[0]
+                logger.info(f"Sample vector metadata: {sample_vec['metadata']}")
+                logger.info(f"Sample vector ID: {sample_vec['id']}")
+                logger.info(f"Vector dimension: {len(sample_vec['values'])}")
+            
             for i in range(0, len(pinecone_vectors), batch_size):
                 batch = pinecone_vectors[i:i + batch_size]
                 batch_num = (i // batch_size) + 1
                 logger.info(f"Upserting batch {batch_num}/{total_batches} ({len(batch)} vectors)")
+                logger.info(f"Namespace being used: {namespace}")
                 
                 self.index.upsert(vectors=batch, namespace=namespace)
                 vectors_upserted += len(batch)
