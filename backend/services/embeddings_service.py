@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional
-from .vector_store_service import VectorStoreService
+from .vector_store import VectorStoreService, VectorStoreError
 from llama_index.core import Document, Settings
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.node_parser import SentenceSplitter

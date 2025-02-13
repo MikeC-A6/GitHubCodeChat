@@ -11,6 +11,7 @@ from llama_index.core.vector_stores.types import (
 )
 
 from ..exceptions import VectorStoreError
+from ...vector_store import VectorStoreService
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +24,16 @@ class VectorStoreManager:
         stats = pinecone_index.describe_index_stats()
         logger.info(f"Initial index stats: {stats}")
         
+        # Initialize LlamaIndex vector store
         self.vector_store = PineconeVectorStore(
             pinecone_index=pinecone_index,
             namespace="repo_githubcloner",  # Set namespace for all operations
             text_key="chunk_content",  # Match the actual field name in Pinecone
             metadata_key="metadata"  # Key for additional metadata
         )
+        
+        # Initialize our vector store service for additional operations
+        self.vector_store_service = VectorStoreService()
         
     def create_repository_filter(self, repository_ids: List[int]) -> MetadataFilters:
         """Create a metadata filter for repository IDs."""
