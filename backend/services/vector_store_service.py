@@ -123,6 +123,7 @@ class VectorStoreService:
         top_k: int = 5
     ) -> List[Dict[str, Any]]:
         logger.info(f"Querying vectors for repository_id={repository_id}, namespace={namespace}")
+        logger.info(f"Query vector dimension: {len(query_embedding)}")
         """
         Query similar vectors
         
@@ -136,6 +137,15 @@ class VectorStoreService:
             filter_dict = {}
             if repository_id is not None:
                 filter_dict["repository_id"] = str(repository_id)
+            
+            logger.info(f"Applying filter: {filter_dict}")
+            
+            # Get total vectors in namespace before query
+            stats = self.index.describe_index_stats()
+            logger.info(f"Total vectors in index: {stats.total_vector_count}")
+            if namespace:
+                namespace_stats = stats.namespaces.get(namespace, {})
+                logger.info(f"Vectors in namespace {namespace}: {namespace_stats.get('vector_count', 0)}")
 
             response = self.index.query(
                 vector=query_embedding,
@@ -144,6 +154,11 @@ class VectorStoreService:
                 filter=filter_dict,
                 namespace=namespace
             )
+            
+            logger.info(f"Number of matches returned: {len(response.matches)}")
+            if response.matches:
+                logger.info(f"Top match score: {response.matches[0].score}")
+                logger.info(f"Top match metadata: {response.matches[0].metadata}")
 
             return [{
                 "score": match.score,
@@ -153,4 +168,5 @@ class VectorStoreService:
             } for match in response.matches]
 
         except Exception as e:
+            logger.error(f"Failed to query vectors: {str(e)}")
             raise VectorStoreError(f"Failed to query vectors: {str(e)}") 

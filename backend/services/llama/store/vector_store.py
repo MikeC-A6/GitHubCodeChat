@@ -19,18 +19,24 @@ class VectorStoreManager:
     
     def __init__(self, pinecone_index):
         """Initialize vector store manager with a Pinecone index."""
+        # Log initial index stats
+        stats = pinecone_index.describe_index_stats()
+        logger.info(f"Initial index stats: {stats}")
+        
         self.vector_store = PineconeVectorStore(
             pinecone_index=pinecone_index,
-            metadata_filters={"repository_id": {"$in": []}},
-            text_key="chunk_content",
-            metadata_key="metadata"
+            namespace="repo_githubcloner",  # Set namespace for all operations
+            text_key="chunk_content",  # Match the actual field name in Pinecone
+            metadata_key="metadata"  # Key for additional metadata
         )
         
     def create_repository_filter(self, repository_ids: List[int]) -> MetadataFilters:
         """Create a metadata filter for repository IDs."""
         try:
             repo_id_strs = [str(repo_id) for repo_id in repository_ids]
-            return MetadataFilters(
+            logger.info(f"Creating filter for repository IDs: {repo_id_strs}")
+            
+            filters = MetadataFilters(
                 filters=[
                     MetadataFilter(
                         key="repository_id",
@@ -39,6 +45,9 @@ class VectorStoreManager:
                     )
                 ]
             )
+            logger.info(f"Created metadata filters: {filters}")
+            return filters
+            
         except Exception as e:
             logger.error(f"Failed to create repository filter: {str(e)}")
             raise VectorStoreError(f"Failed to create repository filter: {str(e)}")

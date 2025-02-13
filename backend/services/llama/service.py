@@ -81,6 +81,26 @@ class LlamaService:
             # Create vector store index
             vector_store = self.vector_store_manager.get_vector_store()
             logger.info("Retrieved vector store")
+            
+            # Log vector store configuration
+            if hasattr(vector_store, '_pinecone_index'):
+                pinecone_index = vector_store._pinecone_index
+                stats = pinecone_index.describe_index_stats()
+                logger.info(f"Index stats: {stats}")
+                logger.info(f"Available namespaces: {list(stats.namespaces.keys()) if stats.namespaces else []}")
+                
+                # Query a sample vector to check metadata structure
+                try:
+                    sample_query = pinecone_index.query(
+                        namespace="repo_githubcloner",
+                        vector=[0.0] * 1536,  # Dummy vector
+                        top_k=1,
+                        include_metadata=True
+                    )
+                    if sample_query.matches:
+                        logger.info(f"Sample vector metadata structure: {sample_query.matches[0].metadata}")
+                except Exception as e:
+                    logger.warning(f"Failed to query sample vector: {str(e)}")
 
             # Set a timeout for index creation
             try:
@@ -90,6 +110,7 @@ class LlamaService:
                         service_context=Settings
                     )
                     logger.info("Created vector store index")
+                    
             except asyncio.TimeoutError:
                 raise ChatError("Timeout while creating vector store index")
 

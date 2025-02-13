@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RetrievalConfig:
     """Configuration for document retrieval."""
-    similarity_top_k: int = 20
+    similarity_top_k: int = 10
     chat_mode: str = "condense_plus_context"
     verbose: bool = True
     
@@ -36,7 +36,7 @@ class LlamaConfig:
         self.pinecone_client: Optional[Pinecone] = None
         self.llm: Optional[Gemini] = None
         self.embed_model: Optional[OpenAIEmbedding] = None
-        self.index_name: str = "codebases"
+        self.index_name: str = "projectcode"
         self.retrieval_config = RetrievalConfig()
         
     def set_retrieval_config(
@@ -95,8 +95,8 @@ class LlamaConfig:
             # Initialize embedding model
             self.embed_model = OpenAIEmbedding(
                 api_key=openai_api_key,
-                model_name="text-embedding-3-large",
-                dimensions=3072
+                model_name="text-embedding-3-small",
+                dimensions=1536
             )
             
             # Configure global settings
