@@ -153,13 +153,14 @@ class GitHubService:
                             entries {
                                 name
                                 type
+                                oid
                                 object {
                                     ... on Blob {
                                         text
+                                        byteSize
+                                        isBinary
                                     }
                                     ... on Tree {
-                                        # We don't retrieve nested entries here
-                                        # because we'll do a separate query for each sub-tree
                                         entries {
                                             name
                                         }
@@ -180,38 +181,50 @@ class GitHubService:
 
         try:
             result = await self.client.execute_async(query, variable_values=variables)
+
+            # 2. Extract the top-level entries from the response
+            repository = result.get("repository")
+            if not repository or not repository.get("object"):
+                # This can happen if the path doesn't exist, or it's an empty directory
+                return files_collected  # Return empty
+
+            entries = repository["object"].get("entries", [])
+
+            # 3. Loop over entries. If it's a blob, we store it. If it's a tree, recurse.
+            for entry in entries:
+                entry_type = entry["type"]
+                entry_name = entry["name"]
+
+                if entry_type == "blob":
+                    # It's a file. Save its text
+                    blob = entry["object"]
+                    if blob and "text" in blob:
+                        # Construct the raw GitHub URL
+                        raw_url = f"https://raw.githubusercontent.com/{owner}/{name}/{branch}/{path}/{entry_name}".lstrip("/")
+                        
+                        # Construct the GitHub web interface URL
+                        file_path = f"{path}/{entry_name}".lstrip("/")
+                        github_url = f"https://github.com/{owner}/{name}/blob/{branch}/{file_path}"
+                        
+                        files_collected.append({
+                            "name": file_path,  # Full relative path
+                            "content": blob["text"],
+                            "url": raw_url,  # Raw content URL
+                            "github_url": github_url,  # GitHub web interface URL
+                            "size": blob.get("byteSize", 0),
+                            "is_binary": blob.get("isBinary", False),
+                            "object_id": entry.get("oid")
+                        })
+
+                elif entry_type == "tree":
+                    # It's a subdirectory. Recurse into it.
+                    sub_path = f"{path}/{entry_name}".strip("/")
+                    logger.debug(f"Recursing into subdirectory: {sub_path}")
+                    sub_files = await self._fetch_tree(owner, name, branch, sub_path)
+                    files_collected.extend(sub_files)
+
+            return files_collected
         except Exception as e:
             msg = f"GitHub GraphQL query failed at path='{path}': {str(e)}"
             logger.error(msg)
             raise ValueError(msg)
-
-        # 2. Extract the top-level entries from the response
-        repository = result.get("repository")
-        if not repository or not repository.get("object"):
-            # This can happen if the path doesn't exist, or it's an empty directory
-            return files_collected  # Return empty
-
-        entries = repository["object"].get("entries", [])
-
-        # 3. Loop over entries. If it's a blob, we store it. If it's a tree, recurse.
-        for entry in entries:
-            entry_type = entry["type"]
-            entry_name = entry["name"]
-
-            if entry_type == "blob":
-                # It's a file. Save its text
-                blob = entry["object"]
-                if blob and "text" in blob:
-                    files_collected.append({
-                        "name": f"{path}/{entry_name}".lstrip("/"),  # Full relative path
-                        "content": blob["text"],
-                    })
-
-            elif entry_type == "tree":
-                # It's a subdirectory. Recurse into it.
-                sub_path = f"{path}/{entry_name}".strip("/")
-                logger.debug(f"Recursing into subdirectory: {sub_path}")
-                sub_files = await self._fetch_tree(owner, name, branch, sub_path)
-                files_collected.extend(sub_files)
-
-        return files_collected

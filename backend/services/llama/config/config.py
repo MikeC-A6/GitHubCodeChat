@@ -117,11 +117,11 @@ class LlamaConfig:
         if self.index_name not in self.pinecone_client.list_indexes().names():
             self.pinecone_client.create_index(
                 name=self.index_name,
-                dimension=3072,
+                dimension=1536,
                 metric="cosine",
                 spec=ServerlessSpec(
                     cloud="aws",
-                    region="us-west-2"
+                    region="us-east-1"
                 )
             )
             logger.info(f"Created new Pinecone index: {self.index_name}")

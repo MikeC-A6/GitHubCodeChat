@@ -32,8 +32,8 @@ class EmbeddingsService:
             
             # Initialize LlamaIndex settings
             self.embed_model = OpenAIEmbedding(
-                model="text-embedding-3-large",
-                dimensions=3072,
+                model="text-embedding-3-small",
+                dimensions=1536,
                 embed_batch_size=10
             )
             Settings.embed_model = self.embed_model
@@ -53,6 +53,7 @@ class EmbeddingsService:
     async def process_repository(
         self,
         repo_id: int,
+        repo_name: str,
         files: List[Dict[str, str]],
         status_callback: Optional[callable] = None
     ) -> bool:
@@ -61,7 +62,8 @@ class EmbeddingsService:
         
         Args:
             repo_id: The repository ID (integer)
-            files: List of files with name and content
+            repo_name: The repository name (for ID generation and namespace)
+            files: List of files with name, content, and metadata
             status_callback: Optional callback to update status
         
         Returns:
@@ -74,25 +76,35 @@ class EmbeddingsService:
             if status_callback:
                 await status_callback("processing", "Started embedding generation")
             
-            # Generate embeddings for all files
-            embeddings_list = await self.generate_embeddings(files)
+            # Clean repository name for namespace
+            namespace = f"repo_{repo_name.lower().replace(' ', '_').replace('-', '_')}"
             
-            # Add repository metadata to each vector
+            # Generate embeddings for all files
+            embeddings_list = await self.generate_embeddings(files, repo_name)
+            
+            # Add essential metadata to each vector
             for vector in embeddings_list:
                 vector["metadata"].update({
                     "repository_id": str(repo_id),
                     "file_path": vector["file_name"],
                     "chunk_content": vector["content"],
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.utcnow().isoformat(),
+                    # Add file-specific metadata
+                    "file_url": vector["file_metadata"].get("url"),
+                    "file_size": vector["file_metadata"].get("size"),
+                    "file_is_binary": vector["file_metadata"].get("is_binary", False),
+                    "file_object_id": vector["file_metadata"].get("object_id"),
+                    "file_github_url": vector["file_metadata"].get("github_url")
                 })
             
-            # Store vectors in Pinecone using vector store service
+            # Store vectors in Pinecone using vector store service with namespace
             await self.vector_store.upsert_vectors(
                 repository_id=repo_id,
-                vectors=embeddings_list
+                vectors=embeddings_list,
+                namespace=namespace
             )
             
-            logger.info(f"Successfully processed repository {repo_id}")
+            logger.info(f"Successfully processed repository {repo_id} in namespace {namespace}")
             
             # Update status if callback provided
             if status_callback:
@@ -110,18 +122,37 @@ class EmbeddingsService:
             
             raise
 
-    async def generate_embeddings(self, files: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    async def generate_embeddings(
+        self, 
+        files: List[Dict[str, str]], 
+        repo_name: str
+    ) -> List[Dict[str, Any]]:
         """
         Generate embeddings for repository files using LlamaIndex and OpenAI
+        
+        Args:
+            files: List of files with content and metadata
+            repo_name: Repository name for ID generation
         """
         embeddings_list = []
+        processed_files = 0
+        skipped_files = 0
+        total_chunks = 0
+        
+        # Clean repository name for ID generation
+        clean_repo_name = repo_name.lower().replace(" ", "_").replace("-", "_")
 
         try:
+            logger.info(f"Starting to process {len(files)} files")
+            
             for file in files:
                 # Skip files with empty or invalid content
                 if not file.get('content') or file['content'].strip() == '':
                     logger.info(f"Skipping empty file: {file.get('name', 'unknown')}")
+                    skipped_files += 1
                     continue
+
+                logger.info(f"Processing file: {file.get('name', 'unknown')}")
 
                 # Create a Document for each file
                 doc = Document(
@@ -132,6 +163,7 @@ class EmbeddingsService:
                 # Skip if document text is empty after processing
                 if not doc.text or doc.text.strip() == '':
                     logger.info(f"Skipping file with empty text after processing: {file.get('name', 'unknown')}")
+                    skipped_files += 1
                     continue
                 
                 # Split document into nodes/chunks
@@ -140,13 +172,18 @@ class EmbeddingsService:
                 # Skip if no valid nodes were created
                 if not nodes:
                     logger.info(f"Skipping file with no valid chunks: {file.get('name', 'unknown')}")
+                    skipped_files += 1
                     continue
                 
+                logger.info(f"File {file.get('name', 'unknown')} split into {len(nodes)} chunks")
+                chunks_for_file = 0
+                
                 # Generate embeddings for each chunk
-                for node in nodes:
+                for chunk_idx, node in enumerate(nodes, 1):
                     try:
                         # Skip empty nodes
                         if not node.text or node.text.strip() == '':
+                            logger.info(f"Skipping empty chunk {chunk_idx} in file {file.get('name', 'unknown')}")
                             continue
                             
                         # Get embedding for the chunk
@@ -154,38 +191,65 @@ class EmbeddingsService:
                             node.text
                         )
                         
+                        # Create unique ID using file name and chunk index
+                        clean_file_name = file["name"].replace("/", "_").replace(".", "_")
+                        vector_id = f"{clean_repo_name}_{clean_file_name}_{chunk_idx}"
+                        
                         # Add to results with metadata
                         embeddings_list.append({
+                            "id": vector_id,
                             "file_name": file["name"],
                             "embedding": embedding,
                             "content": node.text,
+                            "file_metadata": {
+                                "url": file.get("url"),
+                                "size": file.get("size"),
+                                "is_binary": file.get("is_binary", False),
+                                "object_id": file.get("object_id"),
+                                "github_url": file.get("github_url")
+                            },
                             "metadata": {
                                 "file_name": file["name"],
-                                "chunk_index": len(embeddings_list),
+                                "chunk_index": chunk_idx,
                                 "total_chunks": len(nodes)
                             }
                         })
+                        chunks_for_file += 1
+                        total_chunks += 1
+                        
                     except Exception as chunk_error:
-                        logger.error(f"Error processing chunk in file {file['name']}: {str(chunk_error)}")
+                        logger.error(f"Error processing chunk {chunk_idx} in file {file['name']}: {str(chunk_error)}")
                         continue  # Skip this chunk and continue with others
+                
+                logger.info(f"Successfully processed {chunks_for_file} chunks for file {file.get('name', 'unknown')}")
+                processed_files += 1
 
-            logger.info(f"Successfully generated embeddings for {len(files)} files")
+            logger.info(f"Embedding generation summary:")
+            logger.info(f"Total files: {len(files)}")
+            logger.info(f"Successfully processed files: {processed_files}")
+            logger.info(f"Skipped files: {skipped_files}")
+            logger.info(f"Total chunks generated: {total_chunks}")
+            logger.info(f"Total embeddings created: {len(embeddings_list)}")
             return embeddings_list
 
         except Exception as e:
             logger.error(f"Error generating embeddings: {str(e)}")
             raise
 
-    async def delete_repository_embeddings(self, repo_id: int) -> None:
+    async def delete_repository_embeddings(self, repo_id: int, repo_name: str) -> None:
         """
         Delete all embeddings for a repository
         
         Args:
             repo_id: Repository ID to delete embeddings for
+            repo_name: Repository name for namespace
         """
         try:
-            await self.vector_store.delete_repository(repo_id)
-            logger.info(f"Successfully deleted embeddings for repository {repo_id}")
+            # Create namespace from repository name
+            namespace = f"repo_{repo_name.lower().replace(' ', '_').replace('-', '_')}"
+            
+            await self.vector_store.delete_repository(repo_id, namespace)
+            logger.info(f"Successfully deleted embeddings for repository {repo_id} from namespace {namespace}")
         except Exception as e:
             logger.error(f"Error deleting repository embeddings: {str(e)}")
             raise

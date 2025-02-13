@@ -139,6 +139,7 @@ async def generate_embeddings(repo_id: int) -> Dict[str, Any]:
         logger.info("Processing repository and generating embeddings...")
         await embeddings_service.process_repository(
             repo_id=repo_id,
+            repo_name=repository["name"],
             files=files,
             status_callback=update_status
         )
