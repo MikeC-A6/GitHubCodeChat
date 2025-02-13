@@ -128,7 +128,6 @@ class LlamaService:
                         message=message,
                         chat_history=formatted_history
                     )
-                    logger.info(f"Retrieved nodes from vector store: {chat_engine.retriever.retrieve(message)}")
                     logger.info(f"Raw response from chat engine: {response}")
             except asyncio.TimeoutError:
                 raise ChatError("Timeout while waiting for chat response")
