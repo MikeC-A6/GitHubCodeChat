@@ -123,11 +123,13 @@ class LlamaService:
             # Get response with timeout
             try:
                 async with asyncio.timeout(60):  # 60 second timeout
+                    logger.info("Querying chat engine...")
                     response = await chat_engine.achat(
                         message=message,
                         chat_history=formatted_history
                     )
-                    logger.info("Received response from chat engine")
+                    logger.info(f"Retrieved nodes from vector store: {chat_engine.retriever.retrieve(message)}")
+                    logger.info(f"Raw response from chat engine: {response}")
             except asyncio.TimeoutError:
                 raise ChatError("Timeout while waiting for chat response")
 

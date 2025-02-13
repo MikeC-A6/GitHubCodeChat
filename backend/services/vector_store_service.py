@@ -114,6 +114,7 @@ class VectorStoreService:
         namespace: Optional[str] = None,
         top_k: int = 5
     ) -> List[Dict[str, Any]]:
+        logger.info(f"Querying vectors for repository_id={repository_id}, namespace={namespace}")
         """
         Query similar vectors
         
