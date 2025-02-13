@@ -18,7 +18,7 @@ class VectorStoreService:
         """
         try:
             self.pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
-            self.index_name = "code"
+            self.index_name = "projectcode"
             self.dimension = 1536  # text-embedding-3-small dimensions
 
             # Get or create index
