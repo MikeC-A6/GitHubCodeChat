@@ -139,6 +139,11 @@ class LlamaService:
             else:
                 result = str(response)
 
+            # Validate response
+            if not result or len(result.strip()) < 20:
+                logger.warning(f"Received short or empty response: '{result}'")
+                result = "I apologize, but I couldn't generate a proper response. Please try asking your question again."
+
             logger.info(f"Final response length: {len(result)}")
             return result
 
