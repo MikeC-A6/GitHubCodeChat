@@ -128,7 +128,10 @@ class LlamaService:
                     
                     # Log vector store state
                     store_info = self.vector_store_manager.get_vector_store()
-                    logger.info(f"Vector store config: {store_info.pinecone_index.describe_index_stats()}")
+                    if hasattr(store_info, '_pinecone_index'):
+                        logger.info(f"Vector store config: {store_info._pinecone_index.describe_index_stats()}")
+                    elif hasattr(store_info, 'client'):
+                        logger.info(f"Vector store config: {store_info.client.describe_index_stats()}")
                     
                     response = await chat_engine.achat(
                         message=message,
