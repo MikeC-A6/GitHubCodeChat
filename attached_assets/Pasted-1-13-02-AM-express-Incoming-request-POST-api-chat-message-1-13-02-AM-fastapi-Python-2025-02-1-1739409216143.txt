@@ -1,0 +1,29 @@
+1:13:02 AM [express] Incoming request: POST /api/chat/message
+1:13:02 AM [fastapi] Python: 2025-02-13 01:13:02,557 - backend.api.routes.chat - INFO - Received chat request: [14]
+
+1:13:02 AM [fastapi] Python: 2025-02-13 01:13:02,557 - backend.api.routes.chat - INFO - Processing chat request...
+2025-02-13 01:13:02,557 - backend.services.llama.service - INFO - Processing chat request for repositories: [14]
+2025-02-13 01:13:02,557 - backend.services.llama.service - INFO - Message: what does this code do?
+2025-02-13 01:13:02,557 - backend.services.llama.service - INFO - Chat history length: 0
+2025-02-13 01:13:02,557 - backend.services.llama.service - INFO - Created metadata filter: filters=[MetadataFilter(key='repository_id', value=['14'], operator=<FilterOperator.IN: 'in'>)] condition=<FilterCondition.AND: 'and'>
+2025-02-13 01:13:02,557 - backend.services.llama.service - INFO - Retrieved vector store
+
+1:13:02 AM [fastapi] Python: 2025-02-13 01:13:02,558 - backend.services.llama.service - INFO - Created vector store index
+
+1:13:02 AM [fastapi] Python: 2025-02-13 01:13:02,558 - backend.services.llama.service - INFO - Using retrieval config: {'chat_mode': 'condense_plus_context', 'verbose': True, 'similarity_top_k': 20}
+
+1:13:02 AM [fastapi] Python: 2025-02-13 01:13:02,559 - backend.services.llama.service - INFO - Created chat engine
+
+1:13:02 AM [fastapi] Python: 2025-02-13 01:13:02,559 - backend.services.llama.service - INFO - Formatted chat history: 0 messages
+
+1:13:02 AM [fastapi] Python: 2025-02-13 01:13:02,559 - llama_index.core.chat_engine.condense_plus_context - INFO - Condensed question: what does this code do?
+
+1:13:02 AM [fastapi] Python: Condensed question: what does this code do?
+2025-02-13 01:13:02,798 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+
+1:13:03 AM [fastapi] Python: 2025-02-13 01:13:03,034 - backend.services.llama.service - INFO - Received response from chat engine
+
+1:13:03 AM [fastapi] Python: 2025-02-13 01:13:03,034 - backend.services.llama.service - WARNING - Received short or empty response: 'Empty Response'
+2025-02-13 01:13:03,034 - backend.services.llama.service - INFO - Final response length: 94
+2025-02-13 01:13:03,034 - backend.api.routes.chat - INFO - Chat request processed successfully
+INFO:     10.81.0.29:0 - "POST /chat/message HTTP/1.1" 200 OK
