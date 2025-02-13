@@ -140,10 +140,16 @@ class LlamaService:
             else:
                 result = str(response)
 
+            # Log retrieved nodes for debugging
+            if hasattr(response, 'source_nodes'):
+                logger.info(f"Retrieved {len(response.source_nodes)} source nodes")
+                for node in response.source_nodes:
+                    logger.info(f"Source node content: {node.text[:200]}...")
+
             # Validate response
             if not result or len(result.strip()) < 20:
                 logger.warning(f"Received short or empty response: '{result}'")
-                result = "I apologize, but I couldn't generate a proper response. Please try asking your question again."
+                result = "I apologize, but I couldn't find enough context in the codebase to answer your question. Please make sure the repository has been properly processed and embedded."
 
             logger.info(f"Final response length: {len(result)}")
             return result
